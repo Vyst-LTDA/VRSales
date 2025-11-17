@@ -80,6 +80,9 @@ const ApiService = {
   // Produtos
   getProducts: (params) => ApiService.get('/products/', { params }),
   lookupProduct: (barcodeOrName) => ApiService.get(`/products/lookup?q=${barcodeOrName}`),
+  createProduct: (productData) => ApiService.post('/products/', productData),
+  updateProduct: (productId, productData) => ApiService.put(`/products/${productId}`, productData),
+  deleteProduct: (productId) => ApiService.delete(`/products/${productId}`),
 
   // Vendas (Sales) - para finalizar o pagamento
   createSale: (saleData) => ApiService.post('/sales/', saleData),

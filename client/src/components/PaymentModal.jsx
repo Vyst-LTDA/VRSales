@@ -11,9 +11,17 @@ const PaymentModal = ({ open, onCancel, onOk, cartItems, totalAmount, customerId
   const [loading, setLoading] = useState(false);
   const [payments, setPayments] = useState([{ payment_method: 'cash', amount: 0 }]);
 
+  // 1. Arredonda o totalAmount *antes* de qualquer cálculo.
+  // Isso evita erros de ponto flutuante (ex: 30.0000004 vs 30.00)
+  const totalToPay = useMemo(() => {
+      return totalAmount > 0 ? parseFloat(totalAmount.toFixed(2)) : 0;
+  }, [totalAmount]);
+
   const totalPaid = useMemo(() => payments.reduce((acc, p) => acc + (p.amount || 0), 0), [payments]);
-  const remainingAmount = totalAmount - totalPaid;
-  const change = totalPaid > totalAmount ? totalPaid - totalAmount : 0;
+  
+  // 2. Calcula o restante e o troco com base no valor arredondado (totalToPay)
+  const remainingAmount = totalToPay - totalPaid;
+  const change = totalPaid > totalToPay ? totalPaid - totalPaid : 0;
 
   useEffect(() => {
     if (open) {

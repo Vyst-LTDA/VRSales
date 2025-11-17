@@ -1,3 +1,5 @@
+// vyst-ltda/vrsales/VRSales-9c6c4fe15fb6b0affb34c6862f8639045de57ee6/client/src/pages/POSPage.jsx
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Layout, Input, Table, Avatar, Typography, Statistic, Button, Space, Divider, message, Modal, Image, Card, Spin, Tooltip, Empty, AutoComplete, Select, Form
@@ -203,9 +205,28 @@ const PageStyles = () => (
         transform: translateY(-2px);
         box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
     }
-    .action-buttons .ant-btn-primary { background: var(--primary-color); }
-    .action-buttons .ant-btn-dangerous { background: var(--danger-color); color: white !important; }
-    .action-buttons .ant-btn-dangerous:hover { background: #ff4d4f; }
+
+    /* --- INÍCIO DA CORREÇÃO --- */
+    .action-buttons .ant-btn-primary {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        color: white !important; /* Garante o contraste do texto */
+    }
+    .action-buttons .ant-btn-primary:hover {
+        background: #0065ff; /* Tom mais claro de azul para hover */
+        border-color: #0065ff;
+    }
+    .action-buttons .ant-btn-dangerous {
+        background: var(--danger-color);
+        border-color: var(--danger-color); /* Garante a cor da borda */
+        color: white !important;
+    }
+    .action-buttons .ant-btn-dangerous:hover {
+        background: #ff4d4f;
+        border-color: #ff4d4f; /* Garante a cor da borda no hover */
+    }
+    /* --- FIM DA CORREÇÃO --- */
+
     .action-button-key {
         font-weight: 700; margin-right: 8px; padding: 2px 6px;
         border-radius: 4px; background: rgba(0,0,0,0.05); color: var(--text-secondary);
