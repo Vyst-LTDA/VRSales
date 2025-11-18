@@ -11,24 +11,42 @@ const PartialPaymentModal = ({ open, onCancel, onSuccess, orderId, itemsToPay, t
   const [loading, setLoading] = useState(false);
   const [payments, setPayments] = useState([{ payment_method: 'cash', amount: 0 }]);
 
-  const totalPaid = useMemo(() => payments.reduce((acc, p) => acc + (p.amount || 0), 0), [payments]);
-  const remainingAmount = totalAmount - totalPaid;
-  const change = totalPaid > totalAmount ? totalPaid - totalAmount : 0;
+  // --- INÍCIO DA CORREÇÃO (Lógica de Arredondamento) ---
+
+  // 1. Fonte da Verdade: Arredonda o total a ser pago vindo das props
+  const totalToPay = useMemo(() => {
+      return totalAmount > 0 ? parseFloat(totalAmount.toFixed(2)) : 0;
+  }, [totalAmount]);
+
+  // 2. Calcula o total pago pelos inputs, garantindo arredondamento na soma
+  const totalPaid = useMemo(() => {
+      const sum = payments.reduce((acc, p) => acc + (p.amount || 0), 0);
+      return parseFloat(sum.toFixed(2));
+  }, [payments]);
+  
+  // 3. Calcula o restante e o troco com base nos valores arredondados
+  const remainingAmount = parseFloat((totalToPay - totalPaid).toFixed(2));
+  const change = totalPaid > totalToPay ? parseFloat((totalPaid - totalToPay).toFixed(2)) : 0;
+
+  // --- FIM DA CORREÇÃO ---
 
   useEffect(() => {
     if (open) {
-      const initialAmount = totalAmount > 0 ? parseFloat(totalAmount.toFixed(2)) : 0;
+      // Usa o total arredondado para preencher o valor inicial
+      const initialAmount = totalToPay;
       const initialPayments = [{ payment_method: 'cash', amount: initialAmount }];
       setPayments(initialPayments);
       form.setFieldsValue({ payments: initialPayments });
     }
-  }, [open, totalAmount, form]);
+  }, [open, totalToPay, form]);
 
   const handleFinishPayment = async (formValues) => {
     const finalPayments = formValues.payments.filter(p => p && p.amount > 0);
-    const finalTotalPaid = finalPayments.reduce((acc, p) => acc + p.amount, 0);
+    // Recalcula para garantir segurança antes do envio
+    const finalTotalPaid = parseFloat(finalPayments.reduce((acc, p) => acc + p.amount, 0).toFixed(2));
 
-    if (finalTotalPaid < totalAmount) {
+    // Validação com margem de segurança para float (embora o arredondamento acima deva bastar)
+    if (finalTotalPaid < totalToPay - 0.001) {
       message.error('O valor pago é menor que o total dos itens selecionados.');
       return;
     }
@@ -46,9 +64,10 @@ const PartialPaymentModal = ({ open, onCancel, onSuccess, orderId, itemsToPay, t
       
       await ApiService.processPartialPayment(orderId, payload);
       
-      const finalChange = finalTotalPaid - totalAmount;
-      message.success(`Pagamento realizado com sucesso! Troco: R$ ${finalChange.toFixed(2)}`);
-      onSuccess(); // Chama a função de sucesso para fechar o modal e atualizar a comanda
+      // Calcula troco final formatado
+      const finalChange = finalTotalPaid - totalToPay;
+      message.success(`Pagamento realizado com sucesso! Troco: R$ ${finalChange.toFixed(2).replace('.', ',')}`);
+      onSuccess(); 
     } catch (error) {
         console.error("Erro detalhado no pagamento parcial:", error.response);
         const errorMsg = error.response?.data?.detail || 'Erro ao processar o pagamento.';
@@ -84,7 +103,8 @@ const PartialPaymentModal = ({ open, onCancel, onSuccess, orderId, itemsToPay, t
                 )}
             />
              <Divider/>
-            <Statistic title="Total a Pagar" value={totalAmount} prefix="R$" precision={2} />
+            {/* Usa totalToPay arredondado para exibição */}
+            <Statistic title="Total a Pagar" value={totalToPay} prefix="R$" precision={2} />
         </Col>
         <Col span={12}>
           <Statistic
@@ -133,7 +153,8 @@ const PartialPaymentModal = ({ open, onCancel, onSuccess, orderId, itemsToPay, t
               size="large"
               loading={loading}
               block
-              disabled={totalPaid < totalAmount}
+              // Valida o botão usando o remainingAmount corrigido
+              disabled={remainingAmount > 0}
               style={{ height: '50px', fontSize: '1.1rem' }}
             >
               Confirmar Pagamento

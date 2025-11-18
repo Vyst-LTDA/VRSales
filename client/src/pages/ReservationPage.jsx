@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, Badge, Modal, Form, Input, InputNumber, DatePicker, Select, Button, message, Spin, Alert, List, Popconfirm, Typography, Row, Col, Card, Space, Empty } from 'antd';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Calendar, Badge, Modal, Form, Input, InputNumber, DatePicker, Select, Button, message, Spin, List, Popconfirm, Typography, Row, Col, Card, Empty, Tooltip } from 'antd';
 import { motion } from 'framer-motion';
-import { PlusOutlined, BookOutlined, UserOutlined, ClockCircleOutlined, TeamOutlined, TableOutlined, AlignLeftOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { 
+    PlusOutlined, BookOutlined, UserOutlined, TeamOutlined, AlignLeftOutlined, 
+    CloseCircleOutlined, SunOutlined, MoonOutlined 
+} from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-// Estilos (PageStyles) continuam os mesmos...
 const PageStyles = () => (
     <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -57,12 +59,25 @@ const PageStyles = () => (
         gap: 8px;
         margin-top: 24px;
     }
+    
+    .calendar-date-content {
+        position: relative;
+        padding-top: 4px;
+        height: 100%;
+    }
+    
+    .calendar-icons {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+        justify-content: flex-end;
+        font-size: 12px;
+    }
   `}</style>
 );
 
-
 const ReservationPage = () => {
-    const [reservations, setReservations] = useState([]);
+    const [monthReservations, setMonthReservations] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
@@ -70,28 +85,29 @@ const ReservationPage = () => {
     const [selectedDate, setSelectedDate] = useState(dayjs());
     const [formLoading, setFormLoading] = useState(false);
 
-    const fetchReservations = useCallback(async (date) => {
+    const fetchMonthReservations = useCallback(async (dateReference) => {
         setLoading(true);
         try {
-            const start = date.startOf('day').toISOString();
-            const end = date.endOf('day').toISOString();
-            // Passa os parâmetros de data corretamente na URL
+            const start = dateReference.startOf('month').toISOString();
+            const end = dateReference.endOf('month').toISOString();
             const response = await ApiService.get(`/reservations/?start_date=${start}&end_date=${end}`);
-            setReservations(response.data);
+            // Garante que seja sempre um array para evitar crash no forEach
+            setMonthReservations(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             if (error.response?.status !== 401) {
-                message.error('Erro ao carregar reservas.');
+                message.error('Erro ao carregar reservas do mês.');
             }
             console.error("Erro ao buscar reservas:", error);
+            setMonthReservations([]); // Evita estado inválido em caso de erro
         } finally {
             setLoading(false);
         }
     }, []);
 
-
     useEffect(() => {
-        fetchReservations(selectedDate);
-    }, [selectedDate, fetchReservations]);
+        fetchMonthReservations(selectedDate);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); 
 
     useEffect(() => {
         const fetchTables = async () => {
@@ -99,17 +115,85 @@ const ReservationPage = () => {
                 const response = await ApiService.get('/tables/');
                 setTables(response.data);
             } catch (error) {
+                 // Silencia erro de permissão se for o caso
                  if (error.response?.status !== 401) {
-                    message.error("Não foi possível carregar as mesas disponíveis.");
+                    console.error("Erro ao carregar mesas:", error);
                  }
-                 console.error("Erro ao buscar mesas:", error);
             }
         };
         fetchTables();
     }, []);
 
-    const handleDateSelect = (date) => {
-        setSelectedDate(date);
+    // --- OTIMIZAÇÃO: Indexação por Data ---
+    const reservationsByDate = useMemo(() => {
+        const map = {};
+        // Verificação de segurança extra
+        if (Array.isArray(monthReservations)) {
+            monthReservations.forEach(r => {
+                if (r && r.reservation_time) {
+                    const dateKey = dayjs(r.reservation_time).format('YYYY-MM-DD');
+                    if (!map[dateKey]) {
+                        map[dateKey] = [];
+                    }
+                    map[dateKey].push(r);
+                }
+            });
+        }
+        return map;
+    }, [monthReservations]);
+
+    // --- CORREÇÃO PRINCIPAL DO CRASH AQUI ---
+    const dailyReservations = useMemo(() => {
+        const dateKey = selectedDate.format('YYYY-MM-DD');
+        const list = reservationsByDate[dateKey] || [];
+        
+        // AQUI ESTAVA O ERRO: list.sort() mutava o array original.
+        // CORREÇÃO: [...list] cria uma CÓPIA antes de ordenar.
+        return [...list].sort((a, b) => dayjs(a.reservation_time).unix() - dayjs(b.reservation_time).unix());
+    }, [reservationsByDate, selectedDate]);
+
+    const dateCellRender = (value) => {
+        const dateString = value.format('YYYY-MM-DD');
+        const dayReservations = reservationsByDate[dateString];
+
+        if (!dayReservations || dayReservations.length === 0) return null;
+
+        const hasEarly = dayReservations.some(r => dayjs(r.reservation_time).hour() < 18);
+        const hasLate = dayReservations.some(r => dayjs(r.reservation_time).hour() >= 18);
+
+        return (
+            <div className="calendar-date-content">
+                <Badge 
+                    count={dayReservations.length} 
+                    style={{ backgroundColor: '#52c41a' }} 
+                    offset={[10, 0]}
+                />
+                <div className="calendar-icons">
+                    {hasEarly && (
+                        <Tooltip title="Reservas até 18h">
+                            <SunOutlined style={{ color: '#fa8c16' }} />
+                        </Tooltip>
+                    )}
+                    {hasLate && (
+                        <Tooltip title="Reservas após 18h">
+                            <MoonOutlined style={{ color: '#722ed1' }} />
+                        </Tooltip>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const onPanelChange = (value) => {
+        setSelectedDate(value);
+        fetchMonthReservations(value);
+    };
+
+    const onSelect = (value) => {
+        setSelectedDate(value);
+        if (value.month() !== selectedDate.month()) {
+            fetchMonthReservations(value);
+        }
     };
 
     const handleFinish = async (values) => {
@@ -117,30 +201,25 @@ const ReservationPage = () => {
         try {
             const payload = {
                 ...values,
-                // Certifica que a data/hora está no formato ISO 8601 com timezone (UTC 'Z')
                 reservation_time: values.reservation_time.toISOString(),
             };
-            // Envia a requisição POST para o endpoint correto
             await ApiService.post('/reservations/', payload);
             message.success('Reserva criada com sucesso!');
             setIsModalVisible(false);
             form.resetFields();
-            fetchReservations(selectedDate); // Atualiza a lista de reservas para o dia
+            fetchMonthReservations(selectedDate);
         } catch(error) {
-            // Mostra a mensagem de erro detalhada vinda da API, se disponível
             message.error(error.response?.data?.detail || 'Erro ao criar reserva.');
-            console.error("Erro ao criar reserva:", error.response?.data || error);
         } finally {
             setFormLoading(false);
         }
     };
 
-
     const handleDelete = async (id) => {
         try {
             await ApiService.delete(`/reservations/${id}`);
             message.success('Reserva cancelada!');
-            fetchReservations(selectedDate);
+            fetchMonthReservations(selectedDate);
         } catch (error) {
             message.error('Erro ao cancelar reserva.');
         }
@@ -170,22 +249,27 @@ const ReservationPage = () => {
                 </motion.div>
 
                 <Row gutter={24}>
-                    <Col xs={24} md={12}>
+                    <Col xs={24} lg={16}>
                         <motion.div variants={itemVariants}>
                             <Card className="content-card">
-                                <Calendar onSelect={handleDateSelect} value={selectedDate} />
+                                <Calendar 
+                                    value={selectedDate} 
+                                    onSelect={onSelect}
+                                    onPanelChange={onPanelChange}
+                                    cellRender={dateCellRender} 
+                                />
                             </Card>
                         </motion.div>
                     </Col>
-                    <Col xs={24} md={12}>
+                    <Col xs={24} lg={8}>
                          <motion.div variants={itemVariants}>
                             <Card className="content-card">
-                                <Title level={4} style={{ marginBottom: 20 }}>Reservas para {selectedDate.format('DD/MM/YYYY')}</Title>
+                                <Title level={4} style={{ marginBottom: 20 }}>Reservas em {selectedDate.format('DD/MM')}</Title>
                                 {loading ? <div style={{textAlign: 'center', padding: '50px'}}><Spin /></div> : (
                                     <List
                                         className="reservations-list"
-                                        dataSource={reservations}
-                                        locale={{ emptyText: <Empty description="Nenhuma reserva para esta data."/>}}
+                                        dataSource={dailyReservations} 
+                                        locale={{ emptyText: <Empty description="Nenhuma reserva para este dia."/>}}
                                         renderItem={item => (
                                             <List.Item actions={[
                                                 <Popconfirm title="Cancelar reserva?" onConfirm={() => handleDelete(item.id)} okText="Sim" cancelText="Não">
@@ -193,8 +277,13 @@ const ReservationPage = () => {
                                                 </Popconfirm>
                                             ]}>
                                                 <List.Item.Meta
-                                                    title={<Text strong>{item.customer_name} - {dayjs(item.reservation_time).format('HH:mm')}</Text>}
-                                                    description={`Mesa: ${item.table?.number || '?'} | ${item.number_of_people} pessoas`}
+                                                    title={<Text strong>{item.customer_name}</Text>}
+                                                    description={
+                                                        <div style={{display: 'flex', flexDirection: 'column'}}>
+                                                            <Text type="secondary"><ClockCircleOutlined /> {dayjs(item.reservation_time).format('HH:mm')}</Text>
+                                                            <Text type="secondary">Mesa: {item.table?.number || '?'} | {item.number_of_people} pessoas</Text>
+                                                        </div>
+                                                    }
                                                 />
                                             </List.Item>
                                         )}
@@ -218,7 +307,6 @@ const ReservationPage = () => {
                             form={form}
                             layout="vertical"
                             onFinish={handleFinish}
-                            // Define valores iniciais para hora e pessoas
                             initialValues={{ reservation_time: selectedDate.hour(19).minute(0), number_of_people: 2 }}
                         >
                             <Form.Item name="customer_name" label="Nome do Cliente" rules={[{ required: true, message: 'Nome é obrigatório' }]}>
@@ -238,7 +326,6 @@ const ReservationPage = () => {
                             </Row>
                             <Form.Item name="table_id" label="Mesa Designada" rules={[{ required: true, message: 'Selecione a mesa' }]}>
                                 <Select placeholder="Selecione uma mesa disponível" size="large">
-                                    {/* Filtra para mostrar apenas mesas com status 'available' */}
                                     {tables.filter(t => t.status === 'available').map(t => <Option key={t.id} value={t.id}>{t.number} (Cap: {t.capacity})</Option>)}
                                 </Select>
                             </Form.Item>

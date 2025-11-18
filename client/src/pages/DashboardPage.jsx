@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Row, Col, Typography, message, Spin, Segmented } from 'antd';
-// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import {
   DollarCircleOutlined,
@@ -11,26 +10,55 @@ import {
   BarChartOutlined
 } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
-import SalesByHourChart from '../components/dashboard/SalesByHourChart'; // Reutilizado
-import TopProductsList from '../components/dashboard/TopProductsList';   // Reutilizado
-import './DashboardPage.modern.css'; // O novo arquivo de estilo!
+import SalesByHourChart from '../components/dashboard/SalesByHourChart';
+import TopProductsList from '../components/dashboard/TopProductsList';
+import './DashboardPage.modern.css';
 
 const { Title, Text } = Typography;
 
-// Um componente de Card de KPI redesenhado com ícones e cores
-const KpiCard = ({ icon, title, value, prefix, loading, color }) => (
-  <motion.div whileHover={{ y: -5 }} className="kpi-card-wrapper">
-    <div className="kpi-card" style={{ borderBottom: `3px solid ${color}` }}>
-      <div className="kpi-icon" style={{ backgroundColor: color }}>
-        {icon}
+// --- COMPONENTE KpiCard ATUALIZADO E ROBUSTO ---
+const KpiCard = ({ icon, title, value, prefix, loading, color, precision }) => {
+  
+  const formattedValue = useMemo(() => {
+    if (loading) return '...';
+    if (value === undefined || value === null) return '0';
+    
+    // 1. Força a conversão para número, caso venha como string da API
+    const numValue = Number(value);
+
+    // 2. Se for um número válido e tivermos uma precisão definida
+    if (!isNaN(numValue) && precision !== undefined) {
+      return numValue.toLocaleString('pt-BR', { 
+        minimumFractionDigits: precision, 
+        maximumFractionDigits: precision 
+      });
+    }
+    
+    // 3. Fallback: Se não tiver precisão, retorna o valor original ou o número convertido
+    return isNaN(numValue) ? value : numValue;
+  }, [value, precision, loading]);
+
+  return (
+    <motion.div whileHover={{ y: -5 }} className="kpi-card-wrapper">
+      <div className="kpi-card" style={{ borderBottom: `3px solid ${color}` }}>
+        <div className="kpi-icon" style={{ backgroundColor: color }}>
+          {icon}
+        </div>
+        <div className="kpi-content">
+          <Text type="secondary">{title}</Text>
+          {loading ? (
+            <Spin size="small" />
+          ) : (
+            <Title level={3} style={{ margin: 0 }}>
+              {prefix}{formattedValue}
+            </Title>
+          )}
+        </div>
       </div>
-      <div className="kpi-content">
-        <Text type="secondary">{title}</Text>
-        {loading ? <Spin size="small" /> : <Title level={3} style={{ margin: 0 }}>{prefix}{value}</Title>}
-      </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
+// --- FIM DO COMPONENTE ---
 
 const DashboardPage = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -54,7 +82,10 @@ const DashboardPage = () => {
     fetchDashboardData();
   }, []);
 
-  const formatCurrency = (value) => `R$ ${value.toFixed(2).replace('.', ',')}`;
+  const formatCurrency = (value) => {
+      const num = Number(value);
+      return `R$ ${isNaN(num) ? '0,00' : num.toFixed(2).replace('.', ',')}`;
+  };
 
   const kpisData = timeRange === 'today'
     ? dashboardData?.kpis_today
@@ -87,38 +118,42 @@ const DashboardPage = () => {
           <KpiCard
             icon={<DollarCircleOutlined />}
             title="Receita Total"
-            value={kpisData?.total_revenue || 0}
+            value={kpisData?.total_revenue}
             prefix="R$ "
             loading={loading}
             color="#2ecc71"
+            precision={2} // Força 2 casas decimais
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
             icon={<ShoppingCartOutlined />}
             title="Total de Vendas"
-            value={kpisData?.total_sales || 0}
+            value={kpisData?.total_sales}
             loading={loading}
             color="#3498db"
+            // Sem precision = número inteiro
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
             icon={<LineChartOutlined />}
             title="Ticket Médio"
-            value={kpisData?.average_ticket || 0}
+            value={kpisData?.average_ticket}
             prefix="R$ "
             loading={loading}
             color="#9b59b6"
+            precision={2} // Força 2 casas decimais
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
             icon={<TeamOutlined />}
             title="Novos Clientes"
-            value={kpisData?.new_customers || 0}
+            value={kpisData?.new_customers}
             loading={loading}
             color="#e67e22"
+            // Sem precision
           />
         </Col>
 
