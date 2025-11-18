@@ -3,7 +3,7 @@ import { Calendar, Badge, Modal, Form, Input, InputNumber, DatePicker, Select, B
 import { motion } from 'framer-motion';
 import { 
     PlusOutlined, BookOutlined, UserOutlined, TeamOutlined, AlignLeftOutlined, 
-    CloseCircleOutlined, SunOutlined, MoonOutlined 
+    CloseCircleOutlined, SunOutlined, MoonOutlined, ClockCircleOutlined // <-- ADICIONADO AQUI
 } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import dayjs from 'dayjs';
@@ -91,14 +91,13 @@ const ReservationPage = () => {
             const start = dateReference.startOf('month').toISOString();
             const end = dateReference.endOf('month').toISOString();
             const response = await ApiService.get(`/reservations/?start_date=${start}&end_date=${end}`);
-            // Garante que seja sempre um array para evitar crash no forEach
             setMonthReservations(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             if (error.response?.status !== 401) {
                 message.error('Erro ao carregar reservas do mês.');
             }
             console.error("Erro ao buscar reservas:", error);
-            setMonthReservations([]); // Evita estado inválido em caso de erro
+            setMonthReservations([]);
         } finally {
             setLoading(false);
         }
@@ -115,7 +114,6 @@ const ReservationPage = () => {
                 const response = await ApiService.get('/tables/');
                 setTables(response.data);
             } catch (error) {
-                 // Silencia erro de permissão se for o caso
                  if (error.response?.status !== 401) {
                     console.error("Erro ao carregar mesas:", error);
                  }
@@ -127,7 +125,6 @@ const ReservationPage = () => {
     // --- OTIMIZAÇÃO: Indexação por Data ---
     const reservationsByDate = useMemo(() => {
         const map = {};
-        // Verificação de segurança extra
         if (Array.isArray(monthReservations)) {
             monthReservations.forEach(r => {
                 if (r && r.reservation_time) {
@@ -142,13 +139,11 @@ const ReservationPage = () => {
         return map;
     }, [monthReservations]);
 
-    // --- CORREÇÃO PRINCIPAL DO CRASH AQUI ---
+    // --- Lista Diária ---
     const dailyReservations = useMemo(() => {
         const dateKey = selectedDate.format('YYYY-MM-DD');
         const list = reservationsByDate[dateKey] || [];
-        
-        // AQUI ESTAVA O ERRO: list.sort() mutava o array original.
-        // CORREÇÃO: [...list] cria uma CÓPIA antes de ordenar.
+        // Cria cópia antes de ordenar para evitar mutação
         return [...list].sort((a, b) => dayjs(a.reservation_time).unix() - dayjs(b.reservation_time).unix());
     }, [reservationsByDate, selectedDate]);
 
