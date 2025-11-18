@@ -285,15 +285,12 @@ const POSPage = () => {
   const debouncedCustomerSearch = useDebounce(customerSearchValue, 300);
 
   const handleOpenPaymentModal = useCallback(() => {
-    if (cartItems.length === 0) {
-      message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
-      return;
-    }
+    // A verificação de carrinho vazio será movida para quem chama a função
     setIsPaymentModalOpen(true);
-  }, [cartItems]);
+  }, []); // <-- Dependência vazia
 
   const handleCancelSale = useCallback(() => {
-    if (cartItems.length === 0) return;
+    // A verificação de carrinho vazio será movida para quem chama a função
     Modal.confirm({
       title: 'Tem certeza?',
       content: 'Todos os itens serão removidos do carrinho e o cliente desassociado.',
@@ -311,7 +308,7 @@ const POSPage = () => {
         searchInputRef.current?.focus();
       },
     });
-  }, [cartItems]);
+  }, []); // <-- Dependência vazia
 
   useEffect(() => {
     const checkCashRegister = async () => {
@@ -340,11 +337,23 @@ const POSPage = () => {
     }
   }, [location, navigate]);
 
-  useEffect(() => {
+ useEffect(() => {
     searchInputRef.current?.focus();
     const handleKeyDown = (event) => {
-      if (event.key === 'F6') { event.preventDefault(); handleOpenPaymentModal(); }
-      if (event.key === 'F3') { event.preventDefault(); handleCancelSale(); }
+      // Agora, a verificação é feita AQUI, com o valor mais recente do cartItems
+      if (event.key === 'F6') {
+        event.preventDefault();
+        if (cartItems.length === 0) {
+          message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
+          return;
+        }
+        handleOpenPaymentModal();
+      }
+      if (event.key === 'F3') {
+        event.preventDefault();
+        if (cartItems.length === 0) return; // Se o carrinho estiver vazio, não faz nada
+        handleCancelSale();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     const timer = setInterval(() => setCurrentTime(dayjs().format('DD/MM/YYYY HH:mm:ss')), 1000);
@@ -352,8 +361,7 @@ const POSPage = () => {
       window.removeEventListener('keydown', handleKeyDown);
       clearInterval(timer);
     };
-  }, [handleCancelSale, handleOpenPaymentModal]);
-
+  }, [cartItems.length, handleCancelSale, handleOpenPaymentModal]); // <-- Adicionamos cartItems.length
   const fetchProducts = useCallback(async (searchTerm = '') => {
     setSearchLoading(true);
     try {
@@ -744,11 +752,35 @@ const POSPage = () => {
                   </div>
                   <Divider style={{ margin: '16px 0' }}/>
                   <Space direction="vertical" style={{ width: '100%' }} size="middle" className="action-buttons">
-                      <Button type="primary" size="large" icon={<DollarCircleOutlined />} block onClick={handleOpenPaymentModal} disabled={cartItems.length === 0}>
-                          <span className="action-button-key">F6</span> FINALIZAR
+                      <Button
+  type="primary"
+  size="large"
+  icon={<DollarCircleOutlined />}
+  block
+  onClick={() => {
+    if (cartItems.length === 0) {
+      message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
+      return;
+    }
+    handleOpenPaymentModal();
+  }}
+  disabled={cartItems.length === 0}
+>
+  <span className="action-button-key">F6</span> FINALIZAR
                       </Button>
-                      <Button danger size="large" icon={<CloseCircleOutlined />} block onClick={handleCancelSale} disabled={cartItems.length === 0}>
-                          <span className="action-button-key">F3</span> CANCELAR
+                      <Button
+  danger
+  size="large"
+  icon={<CloseCircleOutlined />}
+  block
+  onClick={() => {
+    if (cartItems.length > 0) { // Só chama se o carrinho não estiver vazio
+      handleCancelSale();
+    }
+  }}
+  disabled={cartItems.length === 0}
+>
+  <span className="action-button-key">F3</span> CANCELAR
                       </Button>
                   </Space>
               </div>

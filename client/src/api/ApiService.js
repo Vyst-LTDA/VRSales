@@ -125,6 +125,7 @@ const ApiService = {
   deleteUser: (userId) => ApiService.delete(`/users/${userId}`), // Assumindo que a rota existe
 
   // Adicione as funções de fornecedor que faltavam (exemplo)
+  getSuppliers: () => ApiService.get('/suppliers/'),
   createSupplier: (supplierData) => ApiService.post('/suppliers/', supplierData),
   updateSupplier: (supplierId, supplierData) => ApiService.put(`/suppliers/${supplierId}`, supplierData),
   deleteSupplier: (supplierId) => ApiService.delete(`/suppliers/${supplierId}`), // Assumindo que a rota existe
