@@ -3,7 +3,7 @@ import { Calendar, Badge, Modal, Form, Input, InputNumber, DatePicker, Select, B
 import { motion } from 'framer-motion';
 import { 
     PlusOutlined, BookOutlined, UserOutlined, TeamOutlined, AlignLeftOutlined, 
-    CloseCircleOutlined, SunOutlined, MoonOutlined, ClockCircleOutlined // <-- ADICIONADO AQUI
+    CloseCircleOutlined, SunOutlined, MoonOutlined, ClockCircleOutlined 
 } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import dayjs from 'dayjs';
@@ -122,7 +122,6 @@ const ReservationPage = () => {
         fetchTables();
     }, []);
 
-    // --- OTIMIZAÇÃO: Indexação por Data ---
     const reservationsByDate = useMemo(() => {
         const map = {};
         if (Array.isArray(monthReservations)) {
@@ -139,11 +138,9 @@ const ReservationPage = () => {
         return map;
     }, [monthReservations]);
 
-    // --- Lista Diária ---
     const dailyReservations = useMemo(() => {
         const dateKey = selectedDate.format('YYYY-MM-DD');
         const list = reservationsByDate[dateKey] || [];
-        // Cria cópia antes de ordenar para evitar mutação
         return [...list].sort((a, b) => dayjs(a.reservation_time).unix() - dayjs(b.reservation_time).unix());
     }, [reservationsByDate, selectedDate]);
 
@@ -189,6 +186,10 @@ const ReservationPage = () => {
         if (value.month() !== selectedDate.month()) {
             fetchMonthReservations(value);
         }
+    };
+
+    const disabledDate = (current) => {
+        return current && current < dayjs().startOf('day');
     };
 
     const handleFinish = async (values) => {
@@ -237,9 +238,22 @@ const ReservationPage = () => {
                         <Title level={2} style={{ color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
                             <BookOutlined /> Gestão de Reservas
                         </Title>
-                        <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)} size="large">
+                        {/* --- BOTÃO ATUALIZADO --- */}
+                        <Button 
+                            icon={<PlusOutlined />} 
+                            onClick={() => setIsModalVisible(true)} 
+                            size="large"
+                            style={{ 
+                                backgroundColor: 'white', 
+                                color: '#4A00E0', 
+                                border: 'none',
+                                fontWeight: 'bold',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                            }}
+                        >
                             Nova Reserva
                         </Button>
+                        {/* ----------------------- */}
                     </div>
                 </motion.div>
 
@@ -251,7 +265,8 @@ const ReservationPage = () => {
                                     value={selectedDate} 
                                     onSelect={onSelect}
                                     onPanelChange={onPanelChange}
-                                    cellRender={dateCellRender} 
+                                    cellRender={dateCellRender}
+                                    disabledDate={disabledDate}
                                 />
                             </Card>
                         </motion.div>
@@ -310,7 +325,13 @@ const ReservationPage = () => {
                             <Row gutter={16}>
                                 <Col span={12}>
                                     <Form.Item name="reservation_time" label="Data e Hora" rules={[{ required: true, message: 'Data/Hora é obrigatória' }]}>
-                                        <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" size="large" />
+                                        <DatePicker 
+                                            showTime 
+                                            style={{ width: '100%' }} 
+                                            format="DD/MM/YYYY HH:mm" 
+                                            size="large" 
+                                            disabledDate={disabledDate} 
+                                        />
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>
