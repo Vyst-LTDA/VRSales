@@ -105,5 +105,4 @@ class CRUDReservation(CRUDBase[Reservation, ReservationCreate, ReservationUpdate
 
         return db_obj
 
-# Instancia o CRUD para ser usado nos endpoints
 reservation = CRUDReservation(Reservation)
