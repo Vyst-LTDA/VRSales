@@ -16,3 +16,5 @@ pydantic[email]
 python-multipart
 fpdf2
 reportlab
+fastapi-mail
+twilio

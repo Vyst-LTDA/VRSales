@@ -174,7 +174,7 @@ const CustomerPage = () => {
     
     const handleDelete = async (customerId) => {
         try {
-          await ApiService.delete(`/customers/${customerId}/`);
+          await ApiService.delete(`/customers/${customerId}`);
           message.success('Cliente excluído com sucesso!');
           fetchCustomers();
         } catch (error) {

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.crud.crud_order import order as crud_order, get_full_order
 from app.api import dependencies
 from app.models.user import User as UserModel
-from app.schemas.order import Order as OrderSchema, OrderCreate, OrderItemCreate, PartialPaymentRequest, OrderMerge, OrderTransfer
+from app.schemas.order import Order as OrderSchema, OrderCreate, OrderItemCreate, PartialPaymentRequest, OrderMerge, OrderTransfer, OrderItem as OrderItemSchema, OrderItemStatusUpdate
 from app.schemas.enums import OrderStatus, OrderType
 
 router = APIRouter()
@@ -160,3 +160,33 @@ async def merge_orders(
         source_order_id=merge_data.source_order_id,
         current_user=current_user
     )
+@router.get("/kitchen", response_model=List[OrderSchema])
+async def read_kitchen_orders(
+    db: AsyncSession = Depends(dependencies.get_db),
+    current_user: UserModel = Depends(dependencies.get_current_active_user)
+):
+    """
+    Lista todos os pedidos ativos para o painel da cozinha (KDS).
+    """
+    return await crud_order.get_kitchen_orders(db=db, current_user=current_user)
+
+
+@router.patch("/items/{item_id}/status", response_model=OrderItemSchema)
+async def update_order_item_status(
+    item_id: int,
+    status_in: OrderItemStatusUpdate,
+    db: AsyncSession = Depends(dependencies.get_db),
+    current_user: UserModel = Depends(dependencies.get_current_active_user)
+):
+    """
+    Atualiza o status de um item do pedido (ex: 'ready').
+    """
+    item = await crud_order.update_order_item_status(
+        db=db, 
+        item_id=item_id, 
+        new_status=status_in.status, 
+        current_user=current_user
+    )
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item não encontrado.")
+    return item

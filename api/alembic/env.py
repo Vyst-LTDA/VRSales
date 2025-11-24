@@ -14,7 +14,7 @@ from app.db.base import Base
 from app.models import (
     user, product, customer, supplier, sale, cash_register, ingredient,
     recipe, additional, batch, table, order, payment, stock_movement, store,
-    reservation,variation, category, wall
+    reservation,variation, category, wall, campaign
 )
 # --- FIM DA CORREÇÃO ---
 
