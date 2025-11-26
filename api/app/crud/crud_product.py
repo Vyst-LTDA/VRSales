@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession # <-- ADICIONE ESTA LINHA
 from typing import List, Any, Dict, Union, Optional
 from app.models.user import User as UserModel
-
+from sqlalchemy import or_
 from app.crud.base import CRUDBase
 from app.models.product import Product
 from app.models.supplier import Supplier # <-- Importar Supplier
@@ -46,24 +46,33 @@ class CRUDProduct(CRUDBase[Product, ProductCreate, ProductUpdate]):
         limit: int = 100,
         current_user: UserModel,
         search: Optional[str] = None,
-        category_id: Optional[int] = None, # <-- NOVO Filtro
-        supplier_id: Optional[int] = None  # <-- NOVO Filtro
+        category_id: Optional[int] = None,
+        supplier_id: Optional[int] = None
     ) -> List[Product]:
         """ Obtém uma lista de produtos da loja do usuário, com filtros opcionais. """
         statement = (
             select(self.model)
-            .where(self.model.store_id == current_user.store_id if current_user.role != 'super_admin' else True) # Permite super_admin ver tudo
+            .where(self.model.store_id == current_user.store_id if current_user.role != 'super_admin' else True)
             .options(
                 selectinload(self.model.variations),
                 joinedload(self.model.category),
                 joinedload(self.model.subcategory),
-                joinedload(self.model.supplier) # <-- Carrega Supplier para a lista
+                joinedload(self.model.supplier)
             )
             .order_by(self.model.name)
         )
 
+        # --- ALTERAÇÃO AQUI ---
         if search:
-            statement = statement.where(self.model.name.ilike(f"%{search}%"))
+            # Busca no NOME (ilike = case insensitive) OU no CÓDIGO DE BARRAS (match exato ou parcial)
+            statement = statement.where(
+                or_(
+                    self.model.name.ilike(f"%{search}%"),
+                    self.model.barcode.ilike(f"{search}%") # Busca códigos que começam com o termo
+                )
+            )
+        # ----------------------
+
         if category_id:
             statement = statement.where(self.model.category_id == category_id)
         if supplier_id:

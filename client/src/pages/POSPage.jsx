@@ -232,11 +232,32 @@ const POSPage = () => {
     if (!searchValue) return;
     setSearchLoading(true);
     try {
+      // Usa a rota de lookup que agora busca por nome OU barcode
       const res = await ApiService.lookupProduct(searchValue);
-      if (res.data.length > 0) addProductToCart(res.data[0]);
-      else message.warning('Produto não encontrado');
-    } catch { message.error('Erro na busca'); }
-    finally { setSearchLoading(false); }
+      
+      if (res.data.length > 0) {
+        // 1. Tenta encontrar Correspondência EXATA de Código de Barras
+        const exactBarcodeMatch = res.data.find(p => p.barcode === searchValue);
+        
+        // 2. Se não achar barcode exato, tenta nome exato (opcional, mas útil)
+        const exactNameMatch = res.data.find(p => p.name.toLowerCase() === searchValue.toLowerCase());
+
+        // Prioridade: Barcode Exato > Nome Exato > Primeiro da Lista
+        const productToAdd = exactBarcodeMatch || exactNameMatch || res.data[0];
+
+        addProductToCart(productToAdd);
+      } else {
+        message.warning('Produto não encontrado');
+        // Opcional: Limpar o campo se não encontrar para facilitar nova tentativa
+        setSearchValue(''); 
+      }
+    } catch { 
+      message.error('Erro na busca'); 
+    } finally { 
+      setSearchLoading(false); 
+      // Garante que o foco volte para o input para o próximo scan
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    }
   };
 
   // ... (Clientes - Sem alteração)
