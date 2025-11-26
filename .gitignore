@@ -9,8 +9,7 @@ pycache/
 Ambiente Virtual do Python
 Ignora a pasta do ambiente virtual que criamos na pasta /api
 /api/venv/
-
-
+*/venv/*
 
 Pastas de dependências do Node.js (para o futuro projeto React)
 node_modules/
