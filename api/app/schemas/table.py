@@ -19,6 +19,17 @@ class TableUpdate(BaseModel):
     shape: Optional[TableShape] = None
     rotation: Optional[int] = None
 
+class SimpleTable(TableBase):
+    id: int
+    status: TableStatus
+    pos_x: Optional[int] = 0
+    pos_y: Optional[int] = 0
+    rotation: Optional[int] = 0
+    store_id: int
+
+    class Config:
+        from_attributes = True
+
 class Table(TableBase):
     id: int
     status: TableStatus

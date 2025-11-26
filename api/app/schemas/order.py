@@ -11,6 +11,8 @@ from app.schemas.enums import OrderType, OrderStatus, OrderItemStatus
 from app.schemas.product import Product
 from app.schemas.user import User
 from .payment import PaymentCreate
+from .table import Table as TableSchema
+from .table import SimpleTable as TableSchema
 
 class PartialPaymentItem(BaseModel):
     """Define um item e a quantidade a ser paga em um pagamento parcial."""
@@ -36,6 +38,7 @@ class OrderItem(OrderItemBase):
     price_at_order: float
     product: Optional[Product] = None
     paid_quantity: int
+    status: Optional[OrderItemStatus] = None
     
     class Config:
         from_attributes = True
@@ -59,6 +62,7 @@ class Order(OrderBase):
     created_at: datetime
     user: Optional[User] = None
     items: List[OrderItem] = []
+    table: Optional[TableSchema] = None
     
     class Config:
         from_attributes = True
