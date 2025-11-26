@@ -95,7 +95,8 @@ const ApiService = {
   addItemToOrder: (orderId, itemData) => ApiService.post(`/orders/${orderId}/items`, itemData),
   cancelOrder: (orderId) => ApiService.patch(`/orders/${orderId}/cancel`),
   closeOrder: (orderId) => ApiService.patch(`/orders/${orderId}/close`),
-
+  updateOrderItem: (orderId, itemId, quantity) => ApiService.put(`/orders/${orderId}/items/${itemId}`, { quantity }),
+  removeOrderItem: (orderId, itemId) => ApiService.delete(`/orders/${orderId}/items/${itemId}`),
   // Clientes
   getCustomers: (params) => ApiService.get('/customers/', { params }),
   createCustomer: (customerData) => ApiService.post('/customers/', customerData),

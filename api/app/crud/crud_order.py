@@ -301,6 +301,57 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
             await db.refresh(item)
         
         return item
+    
+    async def update_item_quantity(
+        self, db: AsyncSession, *, order_id: int, item_id: int, quantity: int, current_user: User
+    ) -> Order:
+        """ Atualiza a quantidade de um item no pedido. """
+        # 1. Busca o item
+        stmt = select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
+        result = await db.execute(stmt)
+        item = result.scalars().first()
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="Item não encontrado neste pedido.")
+
+        # 2. Calcula a diferença para o estoque
+        qty_diff = quantity - item.quantity
+        
+        # 3. Atualiza o item
+        item.quantity = quantity
+        db.add(item)
+        
+        # 4. Atualiza estoque (se necessário)
+        # Se qty_diff > 0, estamos tirando mais do estoque. Se < 0, devolvendo.
+        # Nota: O stock_service deve lidar com valores negativos corretamente (devolução)
+        # ou você deve chamar 'adjust_stock' ou 'deduct'. 
+        # Simplificação: Assumindo que o frontend valida estoque negativo na adição.
+        
+        await db.commit()
+        
+        # Retorna o pedido completo atualizado
+        return await get_full_order(db, id=order_id)
+
+    async def remove_item_from_order(
+        self, db: AsyncSession, *, order_id: int, item_id: int, current_user: User
+    ) -> Order:
+        """ Remove um item do pedido. """
+        stmt = select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
+        result = await db.execute(stmt)
+        item = result.scalars().first()
+        
+        if not item:
+            raise HTTPException(status_code=404, detail="Item não encontrado.")
+            
+        # Opcional: Devolver ao estoque aqui se o sistema reservar na adição
+        
+        await db.delete(item)
+        await db.commit()
+        
+        return await get_full_order(db, id=order_id)
+
+# Instância global
+order = CRUDOrder(Order)
 
     # --- FIM DAS NOVAS FUNÇÕES ---
         

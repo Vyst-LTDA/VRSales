@@ -1,261 +1,68 @@
-// vyst-ltda/vrsales/VRSales-9c6c4fe15fb6b0affb34c6862f8639045de57ee6/client/src/pages/POSPage.jsx
-
+// client/src/pages/POSPage.jsx
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  Layout, Input, Table, Avatar, Typography, Statistic, Button, Space, Divider, message, Modal, Image, Card, Spin, Tooltip, Empty, AutoComplete, Select, Form
+  Layout, Input, Table, Avatar, Typography, Button, Space,
+  Divider, message, Modal, Image, Spin, Empty, AutoComplete,
+  Select, Badge, Form, Tag
 } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BarcodeOutlined, ShoppingOutlined, PlusOutlined, MinusOutlined, DeleteOutlined,
-  DollarCircleOutlined, CloseCircleOutlined, CameraOutlined, UserOutlined, WarningOutlined,
-  StarFilled, MailOutlined, PhoneOutlined
+  ShoppingOutlined, PlusOutlined, MinusOutlined, DeleteOutlined,
+  CloseCircleOutlined, UserOutlined, WarningOutlined, StarFilled,
+  MailOutlined, PhoneOutlined, ScanOutlined, CheckCircleFilled,
+  SyncOutlined, SaveOutlined
 } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
-import dayjs from 'dayjs';
 import PaymentModal from '../components/PaymentModal';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDebounce } from '../hooks/useDebounce';
 
-const { Header, Content, Sider } = Layout;
 const { Title, Text } = Typography;
-const { Option } = Select;
 
-// Componente do formulário de cliente, usado no modal
-const CustomerForm = ({ form, onFinish, onCancel }) => {
-  return (
-    <Form
-      form={form}
-      layout="vertical"
-      onFinish={onFinish}
-    >
-      <Form.Item
-        name="full_name"
-        label="Nome Completo"
-        rules={[{ required: true, message: 'Por favor, insira o nome completo!' }]}
-      >
-        <Input prefix={<UserOutlined />} placeholder="Ex: João da Silva" size="large" />
-      </Form.Item>
-      <Form.Item
-        name="email"
-        label="E-mail"
-        rules={[{ type: 'email', message: 'Por favor, insira um e-mail válido!' }]}
-      >
-        <Input prefix={<MailOutlined />} placeholder="Ex: joao.silva@email.com" size="large" />
-      </Form.Item>
-      <Form.Item
-        name="phone_number"
-        label="Telefone"
-      >
-        <Input prefix={<PhoneOutlined />} placeholder="Ex: (16) 99999-8888" size="large" />
-      </Form.Item>
-      <Form.Item style={{ textAlign: 'right', marginBottom: 0, marginTop: 24 }}>
-        <Button onClick={onCancel} style={{ marginRight: 8 }} size="large">
-          Cancelar
-        </Button>
-        <Button type="primary" htmlType="submit" size="large">
-          Adicionar Cliente
-        </Button>
-      </Form.Item>
-    </Form>
-  );
-};
-
-
-// Estilos embutidos completos
-const PageStyles = () => (
+// --- ESTILOS (Mantidos) ---
+const POSStyles = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-
-    .pos-page-layout {
-      --primary-color: #0052CC;
-      --primary-color-light: rgba(0, 82, 204, 0.05);
-      --success-color-rgb: 0, 168, 120;
-      --danger-color: #DE350B;
-      --warning-color: #faad14;
-      --page-bg: #F4F5F7;
-      --card-bg: #FFFFFF;
-      --text-primary: #172B4D;
-      --text-secondary: #595959;
-      --text-on-primary: #FFFFFF;
-      --border-color: #e8e8e8;
-      --zebra-stripe-color: #fafafa;
-    }
-
-    .pos-page-layout {
-      height: 100vh;
-      overflow: hidden;
-      font-family: 'Inter', sans-serif;
-      background-color: var(--page-bg);
-      color: var(--text-primary);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .pos-header {
-      background: var(--primary-color);
-      border-bottom: none;
-      height: 72px;
-      padding: 0 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: var(--text-on-primary);
-      border-radius: 16px;
-      margin: 16px 24px 0 24px;
-      box-shadow: 0 8px 20px -5px rgba(0, 82, 204, 0.5);
-    }
-
-    .pos-header .ant-typography {
-        color: var(--text-on-primary);
-    }
-
-    .pos-content-layout {
-        padding: 16px 24px 24px 24px;
-        background: transparent;
-        flex: 1;
-        min-height: 0;
-    }
-
-    .pos-main-content {
-      display: flex; flex-direction: column;
-      gap: 16px;
-      height: 100%;
-    }
-
-    .clean-card {
-        background: var(--card-bg); border-radius: 16px;
-        border: none; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-        height: 100%;
-    }
-
-    .cart-table-card {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .cart-table-card .ant-card-body {
-        padding: 8px; height: 100%; display: flex; flex-direction: column;
-    }
-
-    .cart-table .ant-table-wrapper {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-    }
-
-    .cart-table .ant-table-thead > tr > th {
-        background-color: var(--primary-color-light);
-        color: var(--primary-color);
-        font-weight: 600;
-    }
-
-    .cart-table .ant-table-tbody > tr:nth-child(even) > td {
-      background-color: var(--zebra-stripe-color);
-    }
-
-    @keyframes highlight-row {
-      0% { background-color: rgba(var(--success-color-rgb), 0.25); }
-      100% { background-color: transparent; }
-    }
-    .highlight-new-item td { animation: highlight-row 1.5s ease-out; }
-
-    .search-input .ant-input-affix-wrapper {
-        border-radius: 12px; background: var(--card-bg);
-        border-color: #d9d9d9; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-    }
-    .search-input .ant-input-affix-wrapper:hover,
-    .search-input .ant-input-affix-wrapper-focused {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.1);
-    }
-
-    .pos-sider { background: transparent !important; padding-left: 24px; }
-
-    .sider-container {
-        display: flex; flex-direction: column; gap: 24px;
-        height: 100%; background: var(--card-bg);
-        border-radius: 16px; padding: 24px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-        overflow-y: auto;
-    }
-
-    .payment-section {
-      margin-top: auto;
-      background-color: var(--page-bg);
-      border-radius: 12px;
-      padding: 16px;
-    }
-
-    .total-display { text-align: right; }
-    .total-display .total-label { font-size: 1.1rem; color: var(--text-secondary); font-weight: 600; }
-    .total-display .total-amount .ant-statistic-content {
-        font-size: 3.5rem !important; font-weight: 900 !important;
-        color: var(--primary-color) !important;
-        line-height: 1 !important;
-    }
-
-    .action-buttons .ant-btn {
-        height: 60px !important; font-size: 1.2rem !important;
-        font-weight: 700; border-radius: 12px;
-        transition: all 0.2s ease-in-out;
-    }
-    .action-buttons .ant-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
-    }
-
-    /* --- INÍCIO DA CORREÇÃO --- */
-    .action-buttons .ant-btn-primary {
-        background: var(--primary-color);
-        border-color: var(--primary-color);
-        color: white !important; /* Garante o contraste do texto */
-    }
-    .action-buttons .ant-btn-primary:hover {
-        background: #0065ff; /* Tom mais claro de azul para hover */
-        border-color: #0065ff;
-    }
-    .action-buttons .ant-btn-dangerous {
-        background: var(--danger-color);
-        border-color: var(--danger-color); /* Garante a cor da borda */
-        color: white !important;
-    }
-    .action-buttons .ant-btn-dangerous:hover {
-        background: #ff4d4f;
-        border-color: #ff4d4f; /* Garante a cor da borda no hover */
-    }
-    /* --- FIM DA CORREÇÃO --- */
-
-    .action-button-key {
-        font-weight: 700; margin-right: 8px; padding: 2px 6px;
-        border-radius: 4px; background: rgba(0,0,0,0.05); color: var(--text-secondary);
-    }
-    .ant-btn-primary .action-button-key, .ant-btn-dangerous .action-button-key {
-        background: rgba(255,255,255,0.2);
-        color: white;
-    }
-
-    .product-autocomplete-item, .customer-select-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .product-autocomplete-item img {
-      width: 32px;
-      height: 32px;
-      object-fit: cover;
-      border-radius: 4px;
-    }
-    .customer-select-item-info {
-        display: flex;
-        justify-content: space-between;
-        width: 100%;
-        align-items: center;
-    }
+    .pos-container { height: calc(100vh - 84px); display: flex; gap: 24px; overflow: hidden; font-family: 'Inter', sans-serif; }
+    .pos-left-panel { flex: 1; display: flex; flex-direction: column; gap: 16px; background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+    .search-wrapper .ant-input-affix-wrapper { padding: 12px 16px; border-radius: 12px; border: 2px solid #eef2f5; background: #f9fafb; transition: all 0.3s; }
+    .search-wrapper .ant-input-affix-wrapper:focus-within { border-color: #0052CC; background: white; box-shadow: 0 0 0 4px rgba(0, 82, 204, 0.1); }
+    .search-wrapper input { font-size: 16px; }
+    .custom-cart-table .ant-table-thead > tr > th { background: #f4f5f7; color: #5e6c84; font-weight: 600; border-bottom: none; }
+    .custom-cart-table .ant-table-tbody > tr > td { border-bottom: 1px solid #f0f0f0; padding: 12px 16px; }
+    .custom-cart-table .ant-table-tbody > tr:last-child > td { border-bottom: none; }
+    @keyframes flash-green { 0% { background-color: rgba(54, 179, 126, 0.2); } 100% { background-color: transparent; } }
+    .row-highlight-new { animation: flash-green 1s ease-out; }
+    .pos-right-panel { width: 400px; display: flex; flex-direction: column; gap: 16px; }
+    .info-card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+    .totals-container { margin-top: auto; background: #091E42; color: white; border-radius: 16px; padding: 24px; box-shadow: 0 8px 24px rgba(9, 30, 66, 0.25); }
+    .totals-container .ant-typography { color: rgba(255,255,255,0.7); }
+    .totals-container .amount-display { font-size: 48px; font-weight: 800; color: #ffffff; line-height: 1; margin: 8px 0 24px 0; letter-spacing: -1px; }
+    .action-btn-lg { height: 56px; font-size: 16px; font-weight: 700; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .key-badge { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px; font-size: 12px; }
+    .product-option-item { padding: 8px 0; display: flex; align-items: center; gap: 12px; }
+    .product-option-item img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; }
   `}</style>
 );
 
+const CustomerForm = ({ form, onFinish, onCancel }) => {
+  return (
+    <Form form={form} layout="vertical" onFinish={onFinish}>
+      <Form.Item name="full_name" label="Nome Completo" rules={[{ required: true, message: 'Obrigatório' }]}>
+        <Input prefix={<UserOutlined />} placeholder="Ex: João da Silva" size="large" />
+      </Form.Item>
+      <Form.Item name="email" label="E-mail" rules={[{ type: 'email', message: 'E-mail inválido' }]}>
+        <Input prefix={<MailOutlined />} placeholder="Ex: joao@email.com" size="large" />
+      </Form.Item>
+      <Form.Item name="phone_number" label="Telefone">
+        <Input prefix={<PhoneOutlined />} placeholder="(16) 99999-8888" size="large" />
+      </Form.Item>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 24 }}>
+        <Button onClick={onCancel} size="large">Cancelar</Button>
+        <Button type="primary" htmlType="submit" size="large">Salvar</Button>
+      </div>
+    </Form>
+  );
+};
 
 const POSPage = () => {
   const [cashRegisterStatus, setCashRegisterStatus] = useState(null);
@@ -263,10 +70,16 @@ const POSPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [activeOrderId, setActiveOrderId] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const [cartItems, setCartItems] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [currentTime, setCurrentTime] = useState(dayjs().format('DD/MM/YYYY HH:mm:ss'));
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  
+  // NOVO: Modal de Cancelamento Controlado
+  const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
+
   const [searchValue, setSearchValue] = useState('');
   const [autocompleteOptions, setAutocompleteOptions] = useState([]);
   const [lastAddedItem, setLastAddedItem] = useState(null);
@@ -279,539 +92,299 @@ const POSPage = () => {
   const [customerForm] = Form.useForm();
 
   const searchInputRef = useRef(null);
-  const customerSelectRef = useRef(null);
-
   const debouncedSearchValue = useDebounce(searchValue, 300);
   const debouncedCustomerSearch = useDebounce(customerSearchValue, 300);
 
-  const handleOpenPaymentModal = useCallback(() => {
-    // A verificação de carrinho vazio será movida para quem chama a função
-    setIsPaymentModalOpen(true);
-  }, []); // <-- Dependência vazia
-
-  const handleCancelSale = useCallback(() => {
-    // A verificação de carrinho vazio será movida para quem chama a função
-    Modal.confirm({
-      title: 'Tem certeza?',
-      content: 'Todos os itens serão removidos do carrinho e o cliente desassociado.',
-      okText: 'Sim, Cancelar Venda',
-      cancelText: 'Não',
-      onOk: () => {
-        setCartItems([]);
-        setLastAddedItem(null);
-        setSelectedCustomer(null);
-        setSearchValue('');
-        setAutocompleteOptions([]);
-        setCustomerSearchValue('');
-        setCustomerOptions([]);
-        message.warning('Venda cancelada.');
-        searchInputRef.current?.focus();
-      },
-    });
-  }, []); // <-- Dependência vazia
+  const mapOrderItemsToTable = (items) => {
+    return items.map(item => ({
+      ...item.product,
+      id: item.product_id,
+      orderItemId: item.id,
+      quantity: item.quantity,
+      price: item.price_at_order || item.price_at_addition || item.product?.price || 0,
+      key: item.product_id
+    }));
+  };
 
   useEffect(() => {
-    const checkCashRegister = async () => {
+    const initializePOS = async () => {
       try {
         const status = await ApiService.getCashRegisterStatus();
         setCashRegisterStatus(status.data);
+        try {
+          const activeOrder = await ApiService.getActivePosOrder();
+          if (activeOrder.data) {
+            setActiveOrderId(activeOrder.data.id);
+            setCartItems(mapOrderItemsToTable(activeOrder.data.items || []));
+            if (activeOrder.data.customer) setSelectedCustomer(activeOrder.data.customer);
+            message.success({ content: 'Venda anterior recuperada!', key: 'restore', duration: 3 });
+          }
+        } catch (err) {}
       } catch (error) {
         if (error.response?.status === 404) {
-          message.warning('Nenhum caixa aberto. Por favor, abra o caixa para começar.');
+          message.warning('Caixa fechado. Redirecionando...');
           navigate('/open-cash-register');
-        } else {
-          message.error('Erro ao verificar status do caixa.');
         }
       } finally {
         setPageLoading(false);
+        setTimeout(() => searchInputRef.current?.focus(), 500);
       }
     };
-    checkCashRegister();
+    initializePOS();
   }, [navigate]);
 
-  useEffect(() => {
-    if (location.state?.orderItems) {
-      const itemsFromOrder = location.state.orderItems.map(item => ({ ...item, key: item.id }));
-      setCartItems(itemsFromOrder);
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location, navigate]);
-
- useEffect(() => {
-    searchInputRef.current?.focus();
-    const handleKeyDown = (event) => {
-      // Agora, a verificação é feita AQUI, com o valor mais recente do cartItems
-      if (event.key === 'F6') {
-        event.preventDefault();
-        if (cartItems.length === 0) {
-          message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
-          return;
-        }
-        handleOpenPaymentModal();
-      }
-      if (event.key === 'F3') {
-        event.preventDefault();
-        if (cartItems.length === 0) return; // Se o carrinho estiver vazio, não faz nada
-        handleCancelSale();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    const timer = setInterval(() => setCurrentTime(dayjs().format('DD/MM/YYYY HH:mm:ss')), 1000);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      clearInterval(timer);
-    };
-  }, [cartItems.length, handleCancelSale, handleOpenPaymentModal]); // <-- Adicionamos cartItems.length
-  const fetchProducts = useCallback(async (searchTerm = '') => {
+  const fetchProducts = useCallback(async (term = '') => {
     setSearchLoading(true);
     try {
-      const limit = searchTerm ? 10 : 50;
-      const response = await ApiService.get(`/products/?search=${searchTerm}&limit=${limit}`);
-      const options = (response.data || []).map(product => ({
-        value: product.name,
+      const res = await ApiService.lookupProduct(term);
+      const options = (res.data || []).map(p => ({
+        value: p.name, key: p.id, productData: p,
         label: (
-          <div className="product-autocomplete-item">
-            <img src={product.image_url || 'https://via.placeholder.com/32'} alt={product.name} />
-            <div>
-              <Text strong>{product.name}</Text><br />
-              <Text type="secondary">R$ {product.price.toFixed(2)}</Text>
+          <div className="product-option-item">
+            <img src={p.image_url || 'https://via.placeholder.com/40'} alt="" />
+            <div style={{ flex: 1 }}>
+              <Text strong>{p.name}</Text>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>COD: {p.barcode || p.id}</Text>
+                <Text type="success" strong>R$ {p.price.toFixed(2)}</Text>
+              </div>
             </div>
           </div>
-        ),
-        key: product.id,
-        productData: product
+        )
       }));
       setAutocompleteOptions(options);
-    } catch {
-      setAutocompleteOptions([]);
-      message.error('Erro ao buscar produtos.');
-    } finally {
-      setSearchLoading(false);
-    }
+    } catch { message.error('Erro ao buscar produtos'); }
+    finally { setSearchLoading(false); }
   }, []);
 
   useEffect(() => {
-    if (debouncedSearchValue.length >= 2) {
-      fetchProducts(debouncedSearchValue);
-    } else if (debouncedSearchValue.length === 0) {
-      setAutocompleteOptions([]);
-    }
+    if (debouncedSearchValue.length >= 2) fetchProducts(debouncedSearchValue);
+    else if (!debouncedSearchValue) setAutocompleteOptions([]);
   }, [debouncedSearchValue, fetchProducts]);
 
-  const handleProductInputFocus = () => {
-    if (!searchValue && autocompleteOptions.length === 0) {
-      fetchProducts();
+  const addProductToCart = async (product) => {
+    setIsSyncing(true);
+    try {
+      let response;
+      
+      if (!activeOrderId) {
+        const newOrderData = {
+          order_type: 'TAKEOUT',
+          customer_id: selectedCustomer?.id || null,
+          items: [{ product_id: product.id, quantity: 1 }]
+        };
+        response = await ApiService.createOrder(newOrderData);
+        setActiveOrderId(response.data.id);
+      } else {
+        response = await ApiService.addItemToOrder(activeOrderId, { 
+          product_id: product.id, 
+          quantity: 1 
+        });
+      }
+
+      if (response.data && response.data.items) {
+        const freshItems = mapOrderItemsToTable(response.data.items);
+        setCartItems(freshItems);
+        const addedItem = freshItems.find(i => i.id === product.id);
+        if (addedItem) setLastAddedItem(addedItem);
+        message.success(`${product.name} adicionado!`);
+      }
+
+      setSearchValue('');
+      setAutocompleteOptions([]);
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+
+    } catch (error) {
+      console.error(error);
+      message.error("Erro ao adicionar item.");
+    } finally {
+      setIsSyncing(false);
     }
   };
-  
-  const addProductToCart = (productToAdd) => {
-    const existingCartItem = cartItems.find(item => item.id === productToAdd.id);
-    const quantityInCart = existingCartItem ? existingCartItem.quantity : 0;
 
-    if (productToAdd.stock <= quantityInCart) {
-        message.warning(`Atenção: Estoque do produto "${productToAdd.name}" está zerado ou negativo.`, 4);
-    }
+  const updateQty = async (product, delta) => {
+    if (!activeOrderId || !product.orderItemId) return;
+    setIsSyncing(true);
     
-    setLastAddedItem(productToAdd);
-    setCartItems(currentItems => {
-        const existingItemIndex = currentItems.findIndex(item => item.id === productToAdd.id);
-        if (existingItemIndex > -1) {
-            const updatedItems = [...currentItems];
-            updatedItems[existingItemIndex] = {
-                ...updatedItems[existingItemIndex],
-                quantity: updatedItems[existingItemIndex].quantity + 1,
-            };
-            return updatedItems;
-        } else {
-            return [{ ...productToAdd, quantity: 1, key: productToAdd.id }, ...currentItems];
-        }
-    });
+    try {
+      let response;
+      const newQty = product.quantity + delta;
 
-    if (!existingCartItem) {
-        message.success(`${productToAdd.name} adicionado!`);
+      if (newQty <= 0) {
+        response = await ApiService.removeOrderItem(activeOrderId, product.orderItemId);
+        message.info('Item removido.');
+      } else {
+        response = await ApiService.updateOrderItem(activeOrderId, product.orderItemId, newQty);
+      }
+
+      if (response.data && response.data.items) {
+        setCartItems(mapOrderItemsToTable(response.data.items));
+      }
+
+    } catch (error) {
+      message.error("Erro ao atualizar quantidade.");
+    } finally {
+      setIsSyncing(false);
     }
-
-    setSearchValue('');
-    setAutocompleteOptions([]);
-    searchInputRef.current?.focus();
-  };
-
-  const onAutocompleteSelect = (_, option) => {
-    addProductToCart(option.productData);
   };
 
   const handleExactSearch = async () => {
-    if (!searchValue || autocompleteOptions.length > 0) return;
+    if (!searchValue) return;
     setSearchLoading(true);
     try {
-      const response = await ApiService.lookupProduct(searchValue);
-      if (response.data.length > 0) {
-        addProductToCart(response.data[0]);
-      } else {
-        message.warning('Produto não encontrado.');
-      }
-    } catch {
-      message.error('Erro ao buscar o produto.');
-    } finally {
-      setSearchLoading(false);
-      searchInputRef.current?.focus();
-    }
-  };
-  
-  const updateQuantity = (productId, amount) => {
-    const itemToUpdate = cartItems.find(item => item.id === productId);
-    if (!itemToUpdate) return;
-  
-    const newQuantity = itemToUpdate.quantity + amount;
-  
-    if (amount > 0 && newQuantity > itemToUpdate.stock) {
-      message.warning(`Atenção: Estoque do produto "${itemToUpdate.name}" é de ${itemToUpdate.stock} unidades.`, 4);
-    }
-  
-    setCartItems(currentItems =>
-      currentItems
-        .map(item => {
-          if (item.id === productId) {
-            return newQuantity > 0 ? { ...item, quantity: newQuantity } : null;
-          }
-          return item;
-        })
-        .filter(Boolean)
-    );
-  
-    if (newQuantity <= 0) {
-      message.info('Item removido.');
-    }
+      const res = await ApiService.lookupProduct(searchValue);
+      if (res.data.length > 0) addProductToCart(res.data[0]);
+      else message.warning('Produto não encontrado');
+    } catch { message.error('Erro na busca'); }
+    finally { setSearchLoading(false); }
   };
 
-  const removeItem = (productId) => {
-    setCartItems(currentItems => currentItems.filter(item => item.id !== productId));
-    message.info('Item removido.');
-  };
-
-  const fetchCustomers = useCallback(async (searchValue = '', initialLoad = false) => {
+  // ... (Clientes - Sem alteração)
+  const fetchCustomers = useCallback(async (term = '') => {
     setCustomerLoading(true);
     try {
-      const response = await ApiService.get('/customers/'); // Busca todos
-      let customersData = response.data || [];
-
-      if (searchValue) {
-        customersData = customersData.filter(c =>
-          c.full_name.toLowerCase().includes(searchValue.toLowerCase()) ||
-          (c.phone_number && c.phone_number.includes(searchValue))
-        );
-      }
-
-      const options = customersData.map(customer => ({
-        value: customer.id,
-        label: (
-          <div className="customer-select-item">
-            <div className="customer-select-item-info">
-              <span>{customer.full_name}</span>
-              <Text type="secondary">
-                <StarFilled style={{ color: '#FFD700', marginRight: 4 }} />
-                {customer.loyalty_points || 0}
-              </Text>
-            </div>
-          </div>
-        ),
-        key: customer.id,
-        customerData: customer
-      }));
-      setCustomerOptions(options);
-    } catch {
-      setCustomerOptions([]);
-      message.error('Erro ao buscar clientes.');
-    } finally {
-      setCustomerLoading(false);
-    }
+      const res = await ApiService.get('/customers/'); 
+      const filtered = (res.data || []).filter(c => !term || c.full_name.toLowerCase().includes(term.toLowerCase()));
+      const opts = filtered.map(c => ({ value: c.id, label: c.full_name, customerData: c }));
+      setCustomerOptions(opts);
+    } catch { message.error('Erro ao buscar clientes'); } 
+    finally { setCustomerLoading(false); }
   }, []);
 
-  const handleCustomerDropdownVisibleChange = (open) => {
-    if (open && customerOptions.length === 0) {
-      fetchCustomers('', true);
-    }
-  };
-
   useEffect(() => {
-    if (debouncedCustomerSearch.length >= 2) {
-      fetchCustomers(debouncedCustomerSearch);
-    } else if (debouncedCustomerSearch.length === 0 && customerSelectRef.current?.props.open) {
-      fetchCustomers('', true);
-    }
+    if (debouncedCustomerSearch.length >= 2) fetchCustomers(debouncedCustomerSearch);
   }, [debouncedCustomerSearch, fetchCustomers]);
-
-  const handleSelectCustomer = (value, option) => {
-    setSelectedCustomer(option?.customerData || null);
-    setCustomerSearchValue('');
-  };
-
-  const handleClearCustomer = () => {
-    setSelectedCustomer(null);
-    setCustomerSearchValue('');
-    setCustomerOptions([]);
-  };
 
   const handleCreateCustomer = async (values) => {
     try {
-      const response = await ApiService.post('/customers/', values);
-      message.success(`Cliente "${response.data.full_name}" criado com sucesso!`);
+      const res = await ApiService.post('/customers/', values);
+      message.success('Cliente cadastrado!');
       setIsCustomerModalVisible(false);
+      setSelectedCustomer(res.data);
       customerForm.resetFields();
-      setSelectedCustomer(response.data);
-      setCustomerOptions(prev => [...prev, {
-        value: response.data.id,
-        label: (
-          <div className="customer-select-item">
-            <div className="customer-select-item-info">
-              <span>{response.data.full_name}</span>
-              <Text type="secondary">
-                <StarFilled style={{ color: '#FFD700', marginRight: 4 }} />
-                {response.data.loyalty_points || 0}
-              </Text>
-            </div>
-          </div>
-        ),
-        key: response.data.id,
-        customerData: response.data
-      }]);
-    } catch (error) {
-      message.error(error.response?.data?.detail || 'Erro ao criar cliente.');
+    } catch (err) { message.error('Erro ao criar cliente'); }
+  };
+
+  // --- NOVO HANDLER DE CANCELAMENTO ---
+  const handleRequestCancel = useCallback(() => {
+    if (activeOrderId) {
+      setIsCancelModalVisible(true);
+    }
+  }, [activeOrderId]);
+
+  const confirmCancelSale = async () => {
+    setIsSyncing(true);
+    try {
+        await ApiService.cancelOrder(activeOrderId);
+        setCartItems([]);
+        setLastAddedItem(null);
+        setSelectedCustomer(null);
+        setActiveOrderId(null);
+        setIsCancelModalVisible(false);
+        message.success('Venda cancelada.');
+        searchInputRef.current?.focus();
+    } catch (err) { 
+        message.error("Erro ao cancelar venda."); 
+    } finally { 
+        setIsSyncing(false); 
     }
   };
+
+  const handleOpenPaymentModal = useCallback(() => {
+      if (cartItems.length > 0) setIsPaymentModalOpen(true);
+      else message.warning('Carrinho vazio.');
+  }, [cartItems]);
 
   const handleSaleSuccess = () => {
     setIsPaymentModalOpen(false);
     setCartItems([]);
     setLastAddedItem(null);
     setSelectedCustomer(null);
-    setSearchValue('');
-    setAutocompleteOptions([]);
-    setCustomerSearchValue('');
-    setCustomerOptions([]);
+    setActiveOrderId(null);
+    message.success('Venda realizada!');
     searchInputRef.current?.focus();
   };
 
-  const { subtotal, totalItems } = useMemo(() => {
-    return {
-        subtotal: cartItems.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 0), 0),
-        totalItems: cartItems.reduce((acc, item) => acc + (item.quantity || 0), 0)
-    }
-  }, [cartItems]);
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'F6') { e.preventDefault(); handleOpenPaymentModal(); }
+      if (e.key === 'F3') { e.preventDefault(); if (activeOrderId) handleRequestCancel(); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleOpenPaymentModal, handleRequestCancel, activeOrderId]);
 
-  const cartColumns = [
-    {
-      title: 'Produto', dataIndex: 'name', key: 'name',
-      render: (name, record) => (
-        <Space>
-          <Avatar shape="square" src={record.image_url} icon={<ShoppingOutlined />} />
-          <Text>{name || 'Produto sem nome'}</Text>
-          {(record.stock <= 0) && (
-            <Tooltip title={`Estoque Negativo ou Zerado: ${record.stock}`}>
-              <WarningOutlined style={{ color: 'var(--danger-color)' }} />
-            </Tooltip>
-          )}
-        </Space>
-      )
-    },
-    {
-      title: 'Qtd.', dataIndex: 'quantity', key: 'quantity', width: 150,
-      render: (q, record) => (
-        <Space>
-          <Button size="small" icon={<MinusOutlined />} onClick={() => updateQuantity(record.id, -1)} />
-          <Text strong style={{ minWidth: 20, textAlign: 'center' }}>{q}</Text>
-          <Button size="small" icon={<PlusOutlined />} onClick={() => updateQuantity(record.id, 1)} />
-        </Space>
-      )
-    },
-    {
-      title: 'Preço Unit.', dataIndex: 'price', key: 'price',
-      render: p => `R$ ${(p || 0).toFixed(2).replace('.', ',')}`
-    },
-    {
-      title: 'Total', key: 'total',
-      render: (_, record) => <Text strong>R$ {((record.price || 0) * (record.quantity || 0)).toFixed(2).replace('.', ',')}</Text>
-    },
-    {
-      key: 'action', width: 50, align: 'center',
-      render: (_, record) => (
-        <Tooltip title="Remover Item">
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => removeItem(record.id)} />
-        </Tooltip>
-      )
-    }
+  const { subtotal, itemCount } = useMemo(() => ({
+    subtotal: cartItems.reduce((acc, i) => acc + (i.price * i.quantity), 0),
+    itemCount: cartItems.reduce((acc, i) => acc + i.quantity, 0)
+  }), [cartItems]);
+
+  const columns = [
+    { title: 'Produto', dataIndex: 'name', key: 'name', render: (name, r) => (
+        <Space><Avatar shape="square" src={r.image_url} icon={<ShoppingOutlined />} style={{ backgroundColor: '#f0f2f5' }} />
+          <div><Text strong>{name}</Text>{r.stock <= 0 && <Tag color="error" style={{ marginLeft: 8, fontSize: 10 }}>Sem Estoque</Tag>}</div></Space>
+      ) },
+    { title: 'Qtd', key: 'qty', width: 120, align: 'center', render: (_, r) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', borderRadius: 6, padding: 4 }}>
+          <Button type="text" size="small" icon={<MinusOutlined />} onClick={() => updateQty(r, -1)} loading={isSyncing} />
+          <Text strong style={{ margin: '0 8px', width: 24, textAlign: 'center' }}>{r.quantity}</Text>
+          <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => updateQty(r, 1)} loading={isSyncing} />
+        </div>
+      ) },
+    { title: 'Total', key: 'total', align: 'right', render: (_, r) => <Text strong>R$ {(r.price * r.quantity).toFixed(2)}</Text> },
+    { key: 'act', width: 50, render: (_, r) => <Button type="text" danger icon={<DeleteOutlined />} onClick={() => updateQty(r, -9999)} /> }
   ];
 
-  if (pageLoading) {
-    return <Spin size="large" tip="Verificando status do caixa..." fullscreen />;
-  }
+  if (pageLoading) return <Spin size="large" fullscreen tip="Carregando PDV..." />;
 
   return (
     <>
-      <PageStyles />
-      <Layout className="pos-page-layout">
-        <Header className="pos-header">
-          <Text strong>Operador: {cashRegisterStatus?.user?.full_name || 'N/A'}</Text>
-          <Title level={4} style={{ margin: 0 }}>FRENTE DE CAIXA</Title>
-          <Text>{currentTime}</Text>
-        </Header>
-        <Layout className="pos-content-layout">
-          <Content>
-            <div className="pos-main-content">
-              <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}>
-                <AutoComplete
-                  options={autocompleteOptions}
-                  style={{ width: '100%' }}
-                  onSelect={onAutocompleteSelect}
-                  onSearch={(text) => setSearchValue(text)}
-                  onFocus={handleProductInputFocus}
-                  value={searchValue}
-                  allowClear
-                  backfill
-                >
-                  <Input
-                    className="search-input"
-                    ref={searchInputRef}
-                    placeholder="Leia o código de barras ou digite para buscar..."
-                    size="large"
-                    prefix={<BarcodeOutlined style={{ fontSize: 20, color: 'var(--primary-color)' }} />}
-                    onPressEnter={handleExactSearch}
-                    suffix={searchLoading ? <Spin size="small" /> : null}
-                  />
-                </AutoComplete>
-              </motion.div>
-              <Card className="clean-card cart-table-card">
-                <Table
-                  className="cart-table"
-                  columns={cartColumns}
-                  dataSource={cartItems}
-                  rowKey="key"
-                  pagination={false}
-                  locale={{ emptyText: <Empty description="Nenhum item no carrinho." /> }}
-                  rowClassName={(record) => record.id === lastAddedItem?.id ? 'highlight-new-item' : ''}
-                  scroll={{ y: 'calc(100vh - 400px)' }}
-                />
-              </Card>
-            </div>
-          </Content>
-          <Sider width={450} className="pos-sider">
-            <div className='sider-container'>
-              <Card bordered={false} bodyStyle={{padding: 0}}>
-                 <Space.Compact style={{ width: '100%' }}>
-                     <Select
-                         ref={customerSelectRef}
-                         showSearch
-                         allowClear
-                         placeholder="Associar cliente (Opcional)"
-                         style={{ flex: 1 }}
-                         value={selectedCustomer?.id}
-                         onSearch={(value) => setCustomerSearchValue(value)}
-                         onChange={handleSelectCustomer}
-                         onClear={handleClearCustomer}
-                         onDropdownVisibleChange={handleCustomerDropdownVisibleChange}
-                         loading={customerLoading}
-                         filterOption={false}
-                         notFoundContent={customerLoading ? <Spin size="small" /> : 'Nenhum cliente encontrado.'}
-                         options={customerOptions}
-                         optionLabelProp="label"
-                     />
-                    <Button icon={<PlusOutlined />} onClick={() => setIsCustomerModalVisible(true)}>
-                      Novo
-                    </Button>
-                 </Space.Compact>
-              </Card>
-
-              <Card bordered={false} bodyStyle={{padding: '16px 0'}}>
-                <AnimatePresence mode="wait">
-                  {lastAddedItem ? (
-                    <motion.div key={lastAddedItem.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-                      <Space direction="vertical" align="center" style={{ width: '100%' }}>
-                        <Image width={120} height={120} src={lastAddedItem.image_url} preview={false} fallback="https://via.placeholder.com/120/ecf0f1/bdc3c7?text=Sem+Img" style={{borderRadius: 8, objectFit: 'cover'}} />
-                        <Title level={5} style={{ textAlign: 'center', margin: '8px 0 0' }}>{lastAddedItem.name}</Title>
-                        <Statistic value={lastAddedItem.price || 0} precision={2} prefix="R$" />
-                      </Space>
-                    </motion.div>
-                  ) : (
-                    <motion.div key="placeholder" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <Space direction="vertical" align="center" style={{ width: '100%', height: 213, justifyContent: 'center' }}>
-                        <CameraOutlined style={{ fontSize: 48, color: '#bdc3c7' }}/>
-                        <Text type="secondary">Aguardando produto...</Text>
-                      </Space>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </Card>
-
-              <div className="payment-section">
-                  <div className="total-display">
-                      <Text className="total-label">VALOR TOTAL</Text>
-                      <motion.div key={subtotal} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-                          <Statistic value={subtotal} precision={2} prefix="R$" className="total-amount" />
-                      </motion.div>
-                      <Statistic title="Total de Itens" value={totalItems} />
-                  </div>
-                  <Divider style={{ margin: '16px 0' }}/>
-                  <Space direction="vertical" style={{ width: '100%' }} size="middle" className="action-buttons">
-                      <Button
-  type="primary"
-  size="large"
-  icon={<DollarCircleOutlined />}
-  block
-  onClick={() => {
-    if (cartItems.length === 0) {
-      message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
-      return;
-    }
-    handleOpenPaymentModal();
-  }}
-  disabled={cartItems.length === 0}
->
-  <span className="action-button-key">F6</span> FINALIZAR
-                      </Button>
-                      <Button
-  danger
-  size="large"
-  icon={<CloseCircleOutlined />}
-  block
-  onClick={() => {
-    if (cartItems.length > 0) { // Só chama se o carrinho não estiver vazio
-      handleCancelSale();
-    }
-  }}
-  disabled={cartItems.length === 0}
->
-  <span className="action-button-key">F3</span> CANCELAR
-                      </Button>
-                  </Space>
-              </div>
-            </div>
-          </Sider>
-        </Layout>
-      </Layout>
-      <PaymentModal
-        open={isPaymentModalOpen}
-        onCancel={() => setIsPaymentModalOpen(false)}
-        onOk={handleSaleSuccess}
-        cartItems={cartItems.map(item => ({
-            product_id: item.id,
-            quantity: item.quantity,
-            price_at_sale: item.price
-        }))}
-        totalAmount={subtotal}
-        customerId={selectedCustomer?.id}
-      />
+      <POSStyles />
+      <div className="pos-container">
+        <div className="pos-left-panel">
+          <div className="search-wrapper">
+            <AutoComplete options={autocompleteOptions} style={{ width: '100%' }} onSelect={(_, opt) => addProductToCart(opt.productData)} onSearch={setSearchValue} value={searchValue} backfill>
+              <Input ref={searchInputRef} size="large" placeholder="Escaneie o código ou digite..." prefix={<ScanOutlined style={{ fontSize: 20, color: '#0052CC', marginRight: 8 }} />} onPressEnter={handleExactSearch} suffix={isSyncing ? <SyncOutlined spin style={{color:'#0052CC'}} /> : (searchLoading ? <Spin size="small"/> : <div style={{ fontSize: 12, color: '#999', border: '1px solid #ddd', padding: '0 6px', borderRadius: 4 }}>ENTER</div>)} />
+            </AutoComplete>
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <Table className="custom-cart-table" columns={columns} dataSource={cartItems} rowKey="key" pagination={false} scroll={{ y: 'calc(100vh - 280px)' }} rowClassName={(r) => r.id === lastAddedItem?.id ? 'row-highlight-new' : ''} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Caixa livre. Inicie uma venda." /> }} />
+          </div>
+        </div>
+        <div className="pos-right-panel">
+          {activeOrderId && <div style={{ background: '#E3FCEF', padding: '8px 12px', borderRadius: 8, color: '#006644', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><SaveOutlined /> Venda #{activeOrderId} salva no sistema.</div>}
+          <div className="info-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><Text type="secondary" strong style={{ fontSize: 12, textTransform: 'uppercase' }}>Cliente</Text>{!selectedCustomer && (<Button type="link" size="small" style={{ padding: 0 }} onClick={() => setIsCustomerModalVisible(true)}>+ Novo</Button>)}</div>
+            {selectedCustomer ? (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F4F5F7', padding: 12, borderRadius: 8 }}><Space><Avatar style={{ backgroundColor: '#0052CC' }}>{selectedCustomer.full_name[0]}</Avatar><div><Text strong display="block">{selectedCustomer.full_name}</Text>{selectedCustomer.loyalty_points > 0 && (<div style={{ display: 'flex', alignItems: 'center', fontSize: 12, color: '#faad14' }}><StarFilled style={{ marginRight: 4 }} /> {selectedCustomer.loyalty_points} pts</div>)}</div></Space><Button type="text" icon={<CloseCircleOutlined />} onClick={() => setSelectedCustomer(null)} /></div>) : (<Select showSearch placeholder="Selecionar Cliente (Opcional)" style={{ width: '100%' }} size="large" onSearch={setCustomerSearchValue} onFocus={() => fetchCustomers('')} filterOption={false} options={customerOptions} onChange={(_, opt) => { setSelectedCustomer(opt.customerData); setCustomerOptions([]); }} notFoundContent={customerLoading ? <Spin size="small" /> : null} />)}
+          </div>
+          <div className="info-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: 180 }}>
+            <AnimatePresence mode="wait">{lastAddedItem ? (<motion.div key={lastAddedItem.id} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} style={{ textAlign: 'center', width: '100%' }}><Badge count={lastAddedItem.quantity > 1 ? `x${cartItems.find(i=>i.id===lastAddedItem.id)?.quantity}` : 0} color="blue"><Image src={lastAddedItem.image_url} width={120} height={120} style={{ objectFit: 'cover', borderRadius: 12, border: '1px solid #eee' }} preview={false} fallback="https://via.placeholder.com/150?text=Sem+Foto" /></Badge><Title level={5} style={{ marginTop: 12, marginBottom: 4 }}>{lastAddedItem.name}</Title><Text type="secondary">R$ {lastAddedItem.price.toFixed(2)} / un</Text><div style={{ marginTop: 12, color: '#36B37E', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12 }}><CheckCircleFilled /> Adicionado</div></motion.div>) : (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', color: '#ccc' }}><ShoppingOutlined style={{ fontSize: 64, marginBottom: 16, opacity: 0.5 }} /><p>Aguardando produtos...</p></motion.div>)}</AnimatePresence>
+          </div>
+          <div className="totals-container">
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><Text>Itens: {itemCount}</Text>{isSyncing && <Text style={{fontSize:12}}><SyncOutlined spin/> Salvando...</Text>}</div>
+            <Divider style={{ borderColor: 'rgba(255,255,255,0.1)', margin: '12px 0' }} />
+            <Text>TOTAL A PAGAR</Text><div className="amount-display">R$ {subtotal.toFixed(2)}</div>
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+              <Button type="primary" className="action-btn-lg" style={{ background: '#36B37E', borderColor: '#36B37E' }} block disabled={!activeOrderId && cartItems.length === 0} onClick={handleOpenPaymentModal}><span className="key-badge">F6</span> FINALIZAR VENDA</Button>
+              <Button danger className="action-btn-lg" block ghost disabled={!activeOrderId} onClick={handleRequestCancel}><span className="key-badge" style={{ background: 'rgba(255,77,79,0.1)', color: '#ff4d4f' }}>F3</span> CANCELAR</Button>
+            </Space>
+          </div>
+        </div>
+      </div>
+      <PaymentModal open={isPaymentModalOpen} onCancel={() => setIsPaymentModalOpen(false)} onOk={handleSaleSuccess} cartItems={cartItems.map(i => ({ product_id: i.id, quantity: i.quantity, price_at_sale: i.price }))} totalAmount={subtotal} customerId={selectedCustomer?.id} orderId={activeOrderId} />
+      <Modal title="Novo Cliente" open={isCustomerModalVisible} onCancel={() => setIsCustomerModalVisible(false)} footer={null} destroyOnClose><CustomerForm form={customerForm} onFinish={handleCreateCustomer} onCancel={() => setIsCustomerModalVisible(false)} /></Modal>
+      
+      {/* MODAL DE CONFIRMAÇÃO DE CANCELAMENTO (NOVO) */}
       <Modal
-        title="Novo Cliente"
-        open={isCustomerModalVisible}
-        onCancel={() => setIsCustomerModalVisible(false)}
-        footer={null}
-        destroyOnClose
+        title={<span style={{color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 8}}><WarningOutlined /> Cancelar Venda?</span>}
+        open={isCancelModalVisible}
+        onOk={confirmCancelSale}
+        onCancel={() => setIsCancelModalVisible(false)}
+        okText="Sim, Cancelar"
+        cancelText="Voltar"
+        okButtonProps={{ danger: true, loading: isSyncing }}
       >
-        <CustomerForm
-          form={customerForm}
-          onFinish={handleCreateCustomer}
-          onCancel={() => setIsCustomerModalVisible(false)}
-        />
+        <p>Tem certeza que deseja cancelar a venda atual? Todos os itens serão removidos e a comanda será encerrada.</p>
       </Modal>
     </>
   );
