@@ -10,7 +10,7 @@ import {
   ShoppingOutlined, PlusOutlined, MinusOutlined, DeleteOutlined,
   CloseCircleOutlined, UserOutlined, WarningOutlined, StarFilled,
   MailOutlined, PhoneOutlined, ScanOutlined, CheckCircleFilled,
-  SyncOutlined, SaveOutlined
+  SyncOutlined, SaveOutlined, ThunderboltFilled
 } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import PaymentModal from '../components/PaymentModal';
@@ -41,6 +41,20 @@ const POSStyles = () => (
     .key-badge { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px; font-size: 12px; }
     .product-option-item { padding: 8px 0; display: flex; align-items: center; gap: 12px; }
     .product-option-item img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; }
+    
+    /* Estilo dos Botões Multiplicadores */
+    .multiplier-btn {
+        border-color: #eef2f5;
+        color: #5e6c84;
+        font-weight: 600;
+        background: #f9fafb;
+        transition: all 0.2s;
+    }
+    .multiplier-btn:hover {
+        border-color: #0052CC;
+        color: #0052CC;
+        background: #ebf3ff;
+    }
   `}</style>
 );
 
@@ -77,7 +91,7 @@ const POSPage = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   
-  // NOVO: Modal de Cancelamento Controlado
+  // Modal de Cancelamento
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
 
   const [searchValue, setSearchValue] = useState('');
@@ -104,6 +118,19 @@ const POSPage = () => {
       price: item.price_at_order || item.price_at_addition || item.product?.price || 0,
       key: item.product_id
     }));
+  };
+
+  // --- SONS ---
+  const playSuccessSound = () => {
+    const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3"); 
+    audio.volume = 0.5;
+    audio.play().catch(e => console.log("Audio play failed", e));
+  };
+
+  const playErrorSound = () => {
+    const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets/soundboard/explode.mp3");
+    audio.volume = 0.3;
+    audio.play().catch(e => console.log("Audio play failed", e));
   };
 
   useEffect(() => {
@@ -134,9 +161,15 @@ const POSPage = () => {
   }, [navigate]);
 
   const fetchProducts = useCallback(async (term = '') => {
+    // Se o termo começar com "N*", ignora a busca até ter algo depois do asterisco
+    if (/^\d+\*$/.test(term)) return;
+
     setSearchLoading(true);
     try {
-      const res = await ApiService.lookupProduct(term);
+      // Remove o multiplicador da busca se existir (ex: "2*coca" -> busca só "coca")
+      const cleanTerm = term.replace(/^\d+[\*x]/i, '');
+      
+      const res = await ApiService.lookupProduct(cleanTerm);
       const options = (res.data || []).map(p => ({
         value: p.name, key: p.id, productData: p,
         label: (
@@ -162,7 +195,18 @@ const POSPage = () => {
     else if (!debouncedSearchValue) setAutocompleteOptions([]);
   }, [debouncedSearchValue, fetchProducts]);
 
-  const addProductToCart = async (product) => {
+  // --- FUNÇÃO PARA BOTÕES DE MULTIPLICADOR ---
+  const handleQuickMultiplier = (n) => {
+    setSearchValue(`${n}*`);
+    searchInputRef.current?.focus();
+  };
+
+  const addProductToCart = async (product, quantityOverride = 1) => {
+    const existing = cartItems.find(i => i.id === product.id);
+    if (product.stock <= (existing ? existing.quantity : 0) + quantityOverride - 1) { 
+       // Warning silencioso ou visual poderia ser aqui
+    }
+
     setIsSyncing(true);
     try {
       let response;
@@ -171,14 +215,14 @@ const POSPage = () => {
         const newOrderData = {
           order_type: 'TAKEOUT',
           customer_id: selectedCustomer?.id || null,
-          items: [{ product_id: product.id, quantity: 1 }]
+          items: [{ product_id: product.id, quantity: quantityOverride }]
         };
         response = await ApiService.createOrder(newOrderData);
         setActiveOrderId(response.data.id);
       } else {
         response = await ApiService.addItemToOrder(activeOrderId, { 
           product_id: product.id, 
-          quantity: 1 
+          quantity: quantityOverride 
         });
       }
 
@@ -231,31 +275,37 @@ const POSPage = () => {
   const handleExactSearch = async () => {
     if (!searchValue) return;
     setSearchLoading(true);
+
+    // Lógica do Multiplicador (Ex: "10*123456")
+    let qtyMultiplier = 1;
+    let termToSearch = searchValue;
+
+    const match = searchValue.match(/^(\d+)[x\*](.+)$/i);
+    if (match) {
+        qtyMultiplier = parseInt(match[1], 10);
+        termToSearch = match[2].trim();
+    }
+
     try {
-      // Usa a rota de lookup que agora busca por nome OU barcode
-      const res = await ApiService.lookupProduct(searchValue);
+      const res = await ApiService.lookupProduct(termToSearch);
       
       if (res.data.length > 0) {
-        // 1. Tenta encontrar Correspondência EXATA de Código de Barras
-        const exactBarcodeMatch = res.data.find(p => p.barcode === searchValue);
-        
-        // 2. Se não achar barcode exato, tenta nome exato (opcional, mas útil)
-        const exactNameMatch = res.data.find(p => p.name.toLowerCase() === searchValue.toLowerCase());
-
-        // Prioridade: Barcode Exato > Nome Exato > Primeiro da Lista
+        const exactBarcodeMatch = res.data.find(p => p.barcode === termToSearch);
+        const exactNameMatch = res.data.find(p => p.name.toLowerCase() === termToSearch.toLowerCase());
         const productToAdd = exactBarcodeMatch || exactNameMatch || res.data[0];
 
-        addProductToCart(productToAdd);
+        await addProductToCart(productToAdd, qtyMultiplier); 
+        playSuccessSound();
       } else {
+        playErrorSound();
         message.warning('Produto não encontrado');
-        // Opcional: Limpar o campo se não encontrar para facilitar nova tentativa
-        setSearchValue(''); 
+        setSearchValue('');
       }
     } catch { 
+      playErrorSound();
       message.error('Erro na busca'); 
     } finally { 
       setSearchLoading(false); 
-      // Garante que o foco volte para o input para o próximo scan
       setTimeout(() => searchInputRef.current?.focus(), 100);
     }
   };
@@ -286,7 +336,6 @@ const POSPage = () => {
     } catch (err) { message.error('Erro ao criar cliente'); }
   };
 
-  // --- NOVO HANDLER DE CANCELAMENTO ---
   const handleRequestCancel = useCallback(() => {
     if (activeOrderId) {
       setIsCancelModalVisible(true);
@@ -363,13 +412,29 @@ const POSPage = () => {
       <POSStyles />
       <div className="pos-container">
         <div className="pos-left-panel">
+          
+          {/* --- BOTÕES DE MULTIPLICADOR RÁPIDO --- */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 0 }}>
+             {[2, 3, 4, 5, 6, 10, 12].map(n => (
+                 <Button 
+                    key={n} 
+                    size="small" 
+                    onClick={() => handleQuickMultiplier(n)}
+                    className="multiplier-btn"
+                    icon={<ThunderboltFilled style={{fontSize: 10}} />}
+                 >
+                    +{n}
+                 </Button>
+             ))}
+          </div>
+
           <div className="search-wrapper">
             <AutoComplete options={autocompleteOptions} style={{ width: '100%' }} onSelect={(_, opt) => addProductToCart(opt.productData)} onSearch={setSearchValue} value={searchValue} backfill>
               <Input ref={searchInputRef} size="large" placeholder="Escaneie o código ou digite..." prefix={<ScanOutlined style={{ fontSize: 20, color: '#0052CC', marginRight: 8 }} />} onPressEnter={handleExactSearch} suffix={isSyncing ? <SyncOutlined spin style={{color:'#0052CC'}} /> : (searchLoading ? <Spin size="small"/> : <div style={{ fontSize: 12, color: '#999', border: '1px solid #ddd', padding: '0 6px', borderRadius: 4 }}>ENTER</div>)} />
             </AutoComplete>
           </div>
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <Table className="custom-cart-table" columns={columns} dataSource={cartItems} rowKey="key" pagination={false} scroll={{ y: 'calc(100vh - 280px)' }} rowClassName={(r) => r.id === lastAddedItem?.id ? 'row-highlight-new' : ''} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Caixa livre. Inicie uma venda." /> }} />
+            <Table className="custom-cart-table" columns={columns} dataSource={cartItems} rowKey="key" pagination={false} scroll={{ y: 'calc(100vh - 320px)' }} rowClassName={(r) => r.id === lastAddedItem?.id ? 'row-highlight-new' : ''} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Caixa livre. Inicie uma venda." /> }} />
           </div>
         </div>
         <div className="pos-right-panel">
@@ -394,8 +459,6 @@ const POSPage = () => {
       </div>
       <PaymentModal open={isPaymentModalOpen} onCancel={() => setIsPaymentModalOpen(false)} onOk={handleSaleSuccess} cartItems={cartItems.map(i => ({ product_id: i.id, quantity: i.quantity, price_at_sale: i.price }))} totalAmount={subtotal} customerId={selectedCustomer?.id} orderId={activeOrderId} />
       <Modal title="Novo Cliente" open={isCustomerModalVisible} onCancel={() => setIsCustomerModalVisible(false)} footer={null} destroyOnClose><CustomerForm form={customerForm} onFinish={handleCreateCustomer} onCancel={() => setIsCustomerModalVisible(false)} /></Modal>
-      
-      {/* MODAL DE CONFIRMAÇÃO DE CANCELAMENTO (NOVO) */}
       <Modal
         title={<span style={{color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 8}}><WarningOutlined /> Cancelar Venda?</span>}
         open={isCancelModalVisible}
