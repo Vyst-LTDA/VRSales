@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react';
-import { Form, Input, Button, message } from 'antd';
+import { Form, Input, Button } from 'antd';
 import { UserOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
-// Removido ApiService daqui, a lógica de submit é passada via props
 
-const CustomerForm = ({ form, customer, onFinish, onCancel }) => { // Recebe form, onFinish e onCancel
+const CustomerForm = ({ form, customer, onFinish, onCancel }) => {
 
   useEffect(() => {
     if (customer) {
@@ -13,23 +12,11 @@ const CustomerForm = ({ form, customer, onFinish, onCancel }) => { // Recebe for
     }
   }, [customer, form]);
 
-  const handleInternalFinish = async (values) => {
-    // A lógica de API (ApiService.post/put) agora está na POSPage (handleCreateCustomer)
-    // Apenas chamamos a função onFinish passada como prop
-    try {
-        await onFinish(values); // Chama a função passada pela POSPage
-    } catch (error) {
-        // O tratamento de erro principal também fica na POSPage
-        console.error("Erro no formulário:", error);
-        message.error("Verifique os dados do formulário.");
-    }
-  };
-
   return (
     <Form
-      form={form} // Usa o form passado via props
+      form={form}
       layout="vertical"
-      onFinish={handleInternalFinish} // Chama o handler interno
+      onFinish={onFinish}
       initialValues={customer}
     >
       <Form.Item
@@ -52,9 +39,7 @@ const CustomerForm = ({ form, customer, onFinish, onCancel }) => { // Recebe for
       >
         <Input prefix={<PhoneOutlined />} placeholder="Ex: (16) 99999-8888" size="large" />
       </Form.Item>
-      {/* Adicione outros campos se necessário (CPF/CNPJ, etc.) */}
 
-      {/* Botões de Ação */}
       <Form.Item style={{ textAlign: 'right', marginBottom: 0, marginTop: 24 }}>
         <Button onClick={onCancel} style={{ marginRight: 8 }} size="large">
           Cancelar
@@ -67,4 +52,4 @@ const CustomerForm = ({ form, customer, onFinish, onCancel }) => { // Recebe for
   );
 };
 
-export default CustomerForm;
+export default CustomerForm; 
