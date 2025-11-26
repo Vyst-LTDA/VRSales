@@ -8,6 +8,7 @@ from app.models.user import User as UserModel
 from app.crud.base import CRUDBase
 from app.models.product import Product
 from app.models.supplier import Supplier # <-- Importar Supplier
+from app.models.batch import ProductBatch
 from app.schemas.product import ProductCreate, ProductUpdate
 from fastapi.encoders import jsonable_encoder
 
@@ -74,11 +75,40 @@ class CRUDProduct(CRUDBase[Product, ProductCreate, ProductUpdate]):
         return result.scalars().all()
 
     async def create(self, db: AsyncSession, *, obj_in: ProductCreate, current_user: UserModel) -> Product:
-        """ Cria um novo produto e o retorna com relacionamentos carregados. """
-        # CRUDBase.create lida com store_id e campos básicos
-        db_obj = await super().create(db=db, obj_in=obj_in, current_user=current_user)
-        # Recarrega com relações após criar
-        return await self._get_product_with_relations(db, db_obj.id)
+        """ 
+        Cria um novo produto e, se fornecido validade, cria o lote inicial automaticamente.
+        """
+        # Separa os dados de validade do objeto principal
+        product_data = obj_in.model_dump()
+        expiration_date = product_data.pop("expiration_date", None)
+        initial_stock = product_data.get("stock", 0)
+        
+        # Cria o produto normalmente (usando CRUDBase ou lógica manual para garantir store_id)
+        if current_user.role != 'super_admin':
+            product_data['store_id'] = current_user.store_id
+            
+        db_product = Product(**product_data)
+        db.add(db_product)
+        await db.flush() # Gera o ID do produto sem comitar ainda
+
+        # Se tiver validade e estoque inicial > 0, cria o lote (Batch)
+        if expiration_date and initial_stock > 0:
+            new_batch = ProductBatch(
+                product_id=db_product.id,
+                store_id=db_product.store_id,
+                quantity=initial_stock,
+                expiration_date=expiration_date
+                # created_at é automático
+            )
+            db.add(new_batch)
+            # Nota: Não precisamos somar ao estoque do produto aqui, 
+            # pois o estoque inicial JÁ foi definido na criação do db_product acima.
+            # O lote serve apenas para rastrear a validade dessa quantidade inicial.
+
+        await db.commit()
+        await db.refresh(db_product)
+        
+        return await self._get_product_with_relations(db, db_product.id)
 
     async def update(
         self, db: AsyncSession, *, db_obj: Product, obj_in: Union[ProductUpdate, Dict[str, Any]], current_user: UserModel

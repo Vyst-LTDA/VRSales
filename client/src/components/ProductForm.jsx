@@ -1,11 +1,10 @@
 // client/src/components/ProductForm.jsx
 import React, { useEffect, useState } from 'react';
-import { Form, Input, InputNumber, Button, message, Row, Col, Select } from 'antd'; // Adicionado Select
-import {
-    AppstoreOutlined, AlignLeftOutlined, DollarCircleOutlined, DropboxOutlined,
-    WarningOutlined, BarcodeOutlined, LinkOutlined, ShopOutlined // Adicionado ShopOutlined
-} from '@ant-design/icons';
+import { Form, Input, InputNumber, Button, message, Row, Col, Select, DatePicker} from 'antd'; // Adicionado Select
+import {AppstoreOutlined, AlignLeftOutlined, DollarCircleOutlined, DropboxOutlined, WarningOutlined, BarcodeOutlined, LinkOutlined, ShopOutlined, CalendarOutlined}
+from '@ant-design/icons';
 import ApiService from '../api/ApiService';
+import dayjs from 'dayjs';
 
 const { Option } = Select; // Adicionado Option
 

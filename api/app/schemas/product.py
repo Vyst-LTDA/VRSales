@@ -1,7 +1,7 @@
 # api/app/schemas/product.py
 from pydantic import Field, validator, ConfigDict
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 import enum # Import enum
 
 # Importa schemas relacionados
@@ -44,6 +44,7 @@ class ProductBase(BaseSchema):
 # Schema para Criação de Produto
 # =====================================================================================
 class ProductCreate(ProductBase):
+    expiration_date: Optional[date] = None
     pass # Herda tudo
 
 # =====================================================================================
