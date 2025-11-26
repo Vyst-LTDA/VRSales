@@ -247,9 +247,13 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         return await get_full_order(db, id=target_order.id)
     async def get_kitchen_orders(self, db: AsyncSession, *, current_user: User) -> List[Order]:
         """
-        Busca todos os pedidos ABERTOS da loja, carregando os itens e detalhes.
-        Usado pelo painel KDS.
+        Busca todos os pedidos ABERTOS da loja, carregando TODAS as dependências profundas
+        para evitar erros de validação (422) ou MissingGreenlet (500).
         """
+        # Importações necessárias para as options (coloque no topo do arquivo se preferir)
+        from app.models.product import Product
+        from app.models.variation import ProductVariation
+
         stmt = (
             select(Order)
             .where(
@@ -257,16 +261,17 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
                 Order.status == OrderStatus.OPEN
             )
             .options(
-                # Carrega a mesa
+                # 1. Carrega a mesa
                 selectinload(Order.table),
-                # Carrega o usuário (vendedor) - FALTAVA ISSO
+                # 2. Carrega o usuário (garçom/operador)
                 selectinload(Order.user),
-                # Carrega os itens e os detalhes profundos do produto
+                # 3. Carrega os itens e TUDO sobre o produto
                 selectinload(Order.items).joinedload(OrderItem.product).options(
-                    selectinload(Product.variations),
                     joinedload(Product.category),
                     joinedload(Product.subcategory),
-                    joinedload(Product.supplier)
+                    joinedload(Product.supplier),
+                    # Carrega variações E suas opções (ex: Tamanho -> P)
+                    selectinload(Product.variations).selectinload(ProductVariation.options) 
                 )
             )
             .order_by(Order.created_at)

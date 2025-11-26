@@ -37,6 +37,16 @@ const { Text } = Typography;
 
 // --- AJUSTE NOS MENUS PARA REFLETIR AS NOVAS PERMISSÕES VISUAIS ---
 const storeMenuItems = [
+   // Análise e Marketing (Admin, Manager)
+    { label: 'Análise e Marketing', key: 'grp-analytics', type: 'group', roles: ['admin', 'manager'],
+      children: [
+        { key: '/dashboard', icon: <PieChartOutlined />, label: 'DashBoard', roles: ['admin', 'manager'] },
+        { key: '/sales-history', icon: <HistoryOutlined />, label: 'Histórico de Vendas', roles: ['admin', 'manager'] },
+        { key: '/reports', icon: <LineChartOutlined />, label: 'Relatórios', roles: ['admin', 'manager'] },
+        { key: '/marketing', icon: <RocketOutlined />, label: 'Marketing', roles: ['admin', 'manager'] },
+      ],
+    },
+    { type: 'divider', roles: ['admin', 'manager', 'cashier'] }, // Divider visível para todos
     // Vendas e Operações (Admin, Manager, Cashier)
     { label: 'Vendas e Operações', key: 'grp-sales', type: 'group', roles: ['admin', 'manager', 'cashier'],
       children: [
@@ -55,16 +65,7 @@ const storeMenuItems = [
         ],
     },
     { type: 'divider', roles: ['admin', 'manager'] }, // Divider só Admin/Manager
-    // Análise e Marketing (Admin, Manager)
-    { label: 'Análise e Marketing', key: 'grp-analytics', type: 'group', roles: ['admin', 'manager'],
-      children: [
-        { key: '/sales-history', icon: <HistoryOutlined />, label: 'Histórico de Vendas', roles: ['admin', 'manager'] },
-        { key: '/dashboard', icon: <PieChartOutlined />, label: 'Análise da Loja', roles: ['admin', 'manager'] },
-        { key: '/reports', icon: <LineChartOutlined />, label: 'Relatórios', roles: ['admin', 'manager'] },
-        { key: '/marketing', icon: <RocketOutlined />, label: 'Marketing', roles: ['admin', 'manager'] },
-      ],
-    },
-    { type: 'divider', roles: ['admin', 'manager', 'cashier'] }, // Divider visível para todos
+   
     // Gestão de Estoque (Admin, Manager, Cashier)
     { label: 'Gestão de Estoque', key: 'grp-management', type: 'group', roles: ['admin', 'manager', 'cashier'],
       children: [
