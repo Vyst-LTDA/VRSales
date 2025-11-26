@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Any
@@ -23,9 +24,8 @@ async def create_customer(
     """
     Cria um novo cliente na loja do usuário autenticado.
     """
-    # Esta chamada agora passa o usuário para o CRUDBase modificado,
-    # que irá extrair e usar o store_id automaticamente.
     return await crud.customer.create(db=db, obj_in=customer_in, current_user=current_user)
+
 @router.get("/", response_model=List[CustomerSchema], dependencies=[Depends(full_permissions)])
 async def read_customers(
     *,
@@ -61,5 +61,25 @@ async def get_customer_sales_history(
             detail="Cliente não encontrado ou não pertence a esta loja."
         )
     
-    # Assumindo que crud.sale.get_sales_by_customer também foi convertido para async
     return await crud.sale.get_sales_by_customer(db, customer_id=customer_id, current_user=current_user)
+
+# --- NOVO ENDPOINT ADICIONADO ---
+@router.delete("/{customer_id}", response_model=CustomerSchema, dependencies=[Depends(manager_permissions)])
+async def delete_customer(
+    *,
+    db: AsyncSession = Depends(get_db),
+    customer_id: int,
+    current_user: UserModel = Depends(get_current_active_user)
+) -> Any:
+    """
+    Exclui um cliente da loja.
+    """
+    customer = await crud.customer.get(db, id=customer_id, current_user=current_user)
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cliente não encontrado"
+        )
+    
+    deleted_customer = await crud.customer.remove(db=db, id=customer_id, current_user=current_user)
+    return deleted_customer

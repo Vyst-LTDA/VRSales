@@ -2,69 +2,41 @@
 from pydantic import Field, validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
+import enum # Import enum
 
-# Importa o nosso novo BaseSchema
+# Importa schemas relacionados
 from .base_schema import BaseSchema
-from .category import ProductCategory, ProductSubcategory
-from .variation import ProductVariation
+from .category import ProductCategory, ProductSubcategory # Já importados
+from .variation import ProductVariation # Já importado
+from .supplier import Supplier as SupplierSchema # <-- Importar schema do Supplier
+
+# --- Adicionar Enum ProductType aqui também ---
+class ProductType(str, enum.Enum):
+    SIMPLE = "SIMPLE"
+    COMPOSED = "COMPOSED"
+    VARIATION = "VARIATION" # Mantido por consistência, embora talvez não usado diretamente
 
 # =====================================================================================
 # Schema Base para Produto
 # =====================================================================================
 class ProductBase(BaseSchema):
-    """Schema base contendo os campos comuns de um produto."""
-    name: str = Field(
-        ..., 
-        min_length=3, 
-        max_length=100,
-        description="Nome do produto. Deve ter entre 3 e 100 caracteres."
-    )
-    description: Optional[str] = Field(
-        None, 
-        max_length=255,
-        description="Descrição detalhada do produto."
-    )
-    price: float = Field(
-        ..., 
-        gt=0, # gt = Greater Than (maior que)
-        description="Preço de venda do produto. Deve ser um valor positivo."
-    )
-    # --- CORREÇÃO AQUI ---
-    # A validação `ge=0` foi removida para permitir estoque negativo.
-    stock: int = Field(
-        ..., 
-        description="Quantidade em estoque do produto."
-    )
-    # --- FIM DA CORREÇÃO ---
-    low_stock_threshold: int = Field(
-        10, 
-        ge=0,
-        description="Limite para alerta de estoque baixo. Padrão é 10."
-    )
-    image_url: Optional[str] = Field(
-        None, 
-        max_length=500,
-        description="URL da imagem do produto."
-    )
-    barcode: Optional[str] = Field(
-        None, 
-        max_length=100,
-        index=True,
-        description="Código de barras do produto (EAN, UPC, etc.)."
-    )
-    category_id: Optional[int] = Field(
-        None,
-        description="ID da categoria principal do produto."
-    )
-    subcategory_id: Optional[int] = Field(
-        None,
-        description="ID da subcategoria do produto."
-    )
-    
-    @validator('name')
+    name: str = Field(..., min_length=3, max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
+    price: float = Field(..., ge=0) # ge=0 permite preço zero, gt=0 exige > 0
+    cost_price: Optional[float] = Field(None, ge=0, description="Preço de custo do produto.") # <-- NOVO
+    stock: int = Field(...) # Permitir estoque negativo foi feito no stock_service
+    low_stock_threshold: int = Field(10, ge=0)
+    image_url: Optional[str] = Field(None, max_length=500)
+    barcode: Optional[str] = Field(None, max_length=100, index=True)
+    category_id: Optional[int] = None
+    subcategory_id: Optional[int] = None
+    supplier_id: Optional[int] = Field(None, description="ID do fornecedor principal.") # <-- NOVO
+    product_type: ProductType = Field(default=ProductType.SIMPLE, description="Tipo do produto.") # <-- NOVO
+
+    # Validator mantido
+    @validator('name', pre=True, always=True)
     def name_must_not_be_empty(cls, value):
-        """Validador para garantir que o nome não seja uma string vazia."""
-        if not value.strip():
+        if isinstance(value, str) and not value.strip():
             raise ValueError('O nome do produto não pode ser vazio.')
         return value
 
@@ -72,39 +44,38 @@ class ProductBase(BaseSchema):
 # Schema para Criação de Produto
 # =====================================================================================
 class ProductCreate(ProductBase):
-    """Schema usado para criar um novo produto no sistema."""
-    pass
+    pass # Herda tudo
 
 # =====================================================================================
 # Schema para Atualização de Produto
 # =====================================================================================
-class ProductUpdate(ProductBase):
-    """
-    Schema usado para atualizar um produto existente.
-    Todos os campos são opcionais na atualização.
-    """
+class ProductUpdate(BaseSchema): # Herda de BaseSchema para ter validações base
     name: Optional[str] = Field(None, min_length=3, max_length=100)
-    price: Optional[float] = Field(None, gt=0)
-    stock: Optional[int] = None # ge=0 removido aqui também
+    description: Optional[str] = Field(None, max_length=255)
+    price: Optional[float] = Field(None, ge=0)
+    cost_price: Optional[float] = Field(None, ge=0) # <-- NOVO
+    stock: Optional[int] = None
     low_stock_threshold: Optional[int] = Field(None, ge=0)
-    category: Optional[ProductCategory] = None
-    subcategory: Optional[ProductSubcategory] = None
+    image_url: Optional[str] = Field(None, max_length=500)
+    barcode: Optional[str] = Field(None, max_length=100)
+    category_id: Optional[int] = None
+    subcategory_id: Optional[int] = None
+    supplier_id: Optional[int] = None # <-- NOVO
+    product_type: Optional[ProductType] = None # <-- NOVO
 
 # =====================================================================================
 # Schema para Leitura/Retorno de Produto da API
 # =====================================================================================
 class Product(ProductBase):
-    """
-    Schema completo do produto, usado para retornar dados da API.
-    Inclui campos de somente leitura como ID e timestamps.
-    """
     id: int
     created_at: datetime
     updated_at: datetime
-    
-    # Relacionamentos (carregados via ORM)
+
+    # Relacionamentos (carregados via ORM com eager loading)
     category: Optional[ProductCategory] = None
     subcategory: Optional[ProductSubcategory] = None
+    supplier: Optional[SupplierSchema] = None # <-- NOVO
     variations: List[ProductVariation] = []
+    # recipe_items: List[RecipeItemSchema] = [] # Adicionar se/quando implementar receitas
 
     model_config = ConfigDict(from_attributes=True)

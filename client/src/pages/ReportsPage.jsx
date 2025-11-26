@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from 'react';
-// A CORREÇÃO ESTÁ AQUI: 'Space' foi adicionado e 'Select' foi removido por não ser usado. 'Text' será extraído do 'Typography'.
-import { Row, Col, Card, DatePicker, Typography, Spin, Alert, message, Space } from 'antd';
+import React, { useState } from 'react';
+// Importações Reduzidas
+import { Row, Col, Card, DatePicker, Typography, Button, message, Space, List, Spin } from 'antd';
 import { motion } from 'framer-motion';
-import { Line, Column } from '@ant-design/charts';
-import { LineChartOutlined, CalendarOutlined } from '@ant-design/icons';
+// Ícones necessários
+import { FilePdfOutlined, CalendarOutlined, DownloadOutlined } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import dayjs from 'dayjs';
 
-// A CORREÇÃO ESTÁ AQUI: Extraindo 'Title' e 'Text' do Typography.
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-// Estilos embutidos para a nova página de relatórios
+// Estilos (Podem ser simplificados)
 const PageStyles = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
-    .reports-page-container {
+    .reports-pdf-page-container {
       padding: 24px;
       background-color: #f0f2f5;
       font-family: 'Inter', sans-serif;
@@ -24,6 +23,7 @@ const PageStyles = () => (
     }
 
     .reports-header {
+      /* ... estilo do header ... */
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -34,132 +34,162 @@ const PageStyles = () => (
       color: white;
       box-shadow: 0 10px 30px -10px rgba(0, 121, 145, 0.5);
     }
-    
-    .report-card {
-        border-radius: 16px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        border: none;
-        height: 100%;
-        transition: all 0.3s ease;
-    }
-    
-    .report-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 24px rgba(0,0,0,0.12);
-    }
 
-    .report-card .ant-card-head-title {
-        font-weight: 600;
-        font-size: 1.1rem;
-    }
+     .report-section {
+        background: #fff;
+        padding: 24px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+     }
+
+     .report-section .ant-typography-title {
+         margin-bottom: 20px;
+         border-bottom: 1px solid #f0f0f0;
+         padding-bottom: 10px;
+     }
+
+     .report-controls {
+         display: flex;
+         align-items: center;
+         gap: 16px;
+         flex-wrap: wrap;
+         margin-bottom: 16px;
+     }
   `}</style>
 );
 
-const ReportsPage = () => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [salesData, setSalesData] = useState([]);
-  const [topProducts, setTopProducts] = useState([]);
-  const [dateRange, setDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
+// --- Componente para a Secção de Relatório ---
+const ReportSection = ({ title, children, onGeneratePdf, loading }) => (
+    <Card className="report-section">
+        <Title level={4}>{title}</Title>
+        <div className="report-controls">
+            {children} {/* Aqui entram os filtros (ex: RangePicker) */}
+        </div>
+        <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            onClick={onGeneratePdf}
+            loading={loading}
+            size="large"
+        >
+            Gerar PDF
+        </Button>
+    </Card>
+);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!dateRange || dateRange.length !== 2) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const startDate = dateRange[0].format('YYYY-MM-DD');
-        const endDate = dateRange[1].format('YYYY-MM-DD');
-        
-        const [topProductsRes, salesEvolutionRes] = await Promise.all([
-          ApiService.getTopSellingProducts(10),
-          ApiService.getSalesEvolution(startDate, endDate)
-        ]);
 
-        setSalesData(salesEvolutionRes.data);
-        setTopProducts(topProductsRes.data);
-      } catch (err) {
-        setError('Falha ao buscar dados para os relatórios.');
-        message.error('Não foi possível carregar os relatórios.');
+const ReportsPagePdf = () => {
+  const [loadingPdf, setLoadingPdf] = useState({ salesByPeriod: false, /* outros relatorios */ });
+  const [salesDateRange, setSalesDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
+  // Adicionar estados para filtros de outros relatórios aqui (ex: selectedCustomer)
+
+  // --- Função para descarregar o PDF ---
+  const handleDownloadPdf = async (apiCall, reportName) => {
+    setLoadingPdf(prev => ({ ...prev, [reportName]: true }));
+    try {
+      const response = await apiCall();
+
+      if (response.data instanceof Blob) {
+        const contentDisposition = response.headers['content-disposition'];
+        let filename = `${reportName}_${dayjs().format('YYYYMMDD')}.pdf`; // Nome padrão
+
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/); // Regex um pouco mais robusta
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1];
+          }
+        }
+        filename = filename.replace(/[\s_]+$/, '').replace(/\.pdf[^.]*$/i, '') + '.pdf';
+
+              // Cria uma URL temporária para o blob
+              const url = window.URL.createObjectURL(new Blob([response.data]));
+              // Cria um link temporário e clica nele para iniciar o download
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', filename);
+              document.body.appendChild(link);
+              link.click();
+              // Limpa a URL e remove o link
+              link.parentNode.removeChild(link);
+              window.URL.revokeObjectURL(url);
+              message.success(`Relatório "${reportName}" descarregado!`);
+          } else {
+               message.error(`Erro ao descarregar ${reportName}: Resposta inválida.`);
+               console.error("Resposta inválida da API:", response);
+          }
+      } catch (error) {
+           message.error(`Erro ao gerar ${reportName}: ${error.response?.data?.detail || error.message}`);
+           console.error(`Erro ao gerar ${reportName}:`, error.response || error);
       } finally {
-        setLoading(false);
+           // Remove o estado de loading específico
+           setLoadingPdf(prev => ({ ...prev, [reportName]: false }));
       }
-    };
-    fetchData();
-  }, [dateRange]);
-  
-  const salesConfig = {
-    data: salesData,
-    xField: 'date',
-    yField: 'value',
-    height: 350,
-    xAxis: { title: { text: 'Data' } },
-    yAxis: { title: { text: 'Total de Vendas (R$)' } },
-    tooltip: { formatter: (datum) => ({ name: 'Vendas', value: `R$ ${datum.value.toFixed(2)}` }) },
-    smooth: true,
-    area: { style: { fill: 'l(270) 0:#ffffff 0.5:#7ec2f3 1:#1890ff' } },
-    line: { color: '#1890ff' },
-  };
-  
-  const productsConfig = {
-    data: topProducts,
-    xField: 'product_name',
-    yField: 'total_quantity',
-    height: 350,
-    xAxis: { label: { autoHide: true, autoRotate: false } },
-    yAxis: { title: { text: 'Quantidade Vendida' } },
-    meta: {
-        product_name: { alias: 'Produto' },
-        total_quantity: { alias: 'Quantidade Vendida' },
-    },
-    color: '#27ae60',
   };
 
-  if (error) {
-    return <Alert message="Erro de Carregamento" description={error} type="error" showIcon />;
-  }
+
+  // --- Funções específicas para chamar o download de cada relatório ---
+  const generateSalesPdf = () => {
+      if (!salesDateRange || salesDateRange.length !== 2 || !salesDateRange[0] || !salesDateRange[1]) {
+          message.warning("Selecione um intervalo de datas válido.");
+          return;
+      }
+      const startDate = salesDateRange[0].format('YYYY-MM-DD');
+      const endDate = salesDateRange[1].format('YYYY-MM-DD');
+      handleDownloadPdf(() => ApiService.getSalesByPeriodPdf(startDate, endDate), 'VendasPorPeriodo');
+  };
+
+  // Adicionar outras funções generateXxxPdf aqui...
+
 
   return (
     <>
       <PageStyles />
-      <motion.div className="reports-page-container" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <motion.div className="reports-pdf-page-container" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <div className="reports-header">
           <Title level={2} style={{ color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-            <LineChartOutlined /> Relatórios Gerenciais
+            <FilePdfOutlined /> Gerador de Relatórios PDF
           </Title>
         </div>
-        
+
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}>
-            <Card style={{ marginBottom: 24, borderRadius: 12 }}>
+            {/* Secção para Relatório de Vendas por Período */}
+            <ReportSection
+                title="Vendas por Período"
+                onGeneratePdf={generateSalesPdf}
+                loading={loadingPdf.salesByPeriod}
+            >
                 <Space>
-                    <CalendarOutlined style={{ fontSize: 20, color: '#555' }}/>
-                    <Text strong>Selecione o Período:</Text>
-                    <RangePicker picker="date" value={dateRange} onChange={setDateRange} size="large" />
+                    <CalendarOutlined style={{ fontSize: 18, color: '#555' }} />
+                    <Text>Período:</Text>
+                    <RangePicker
+                        value={salesDateRange}
+                        onChange={setSalesDateRange}
+                        size="middle"
+                        allowClear={false}
+                    />
                 </Space>
-            </Card>
+            </ReportSection>
+
+            {/* Adicionar outras secções de Relatório aqui */}
+            {/*
+            <ReportSection title="Inventário de Stock" onGeneratePdf={generateStockPdf} loading={loadingPdf.stock}>
+                 <Text>(Relatório de todo o stock atual)</Text>
+            </ReportSection>
+
+            <ReportSection title="Histórico do Cliente" onGeneratePdf={generateCustomerHistoryPdf} loading={loadingPdf.customerHistory}>
+                 <Space>
+                    <UserOutlined/>
+                    <Text>Cliente:</Text>
+                    <Select placeholder="Selecione um cliente..." style={{ width: 250 }}/> // Precisa de lógica para buscar/selecionar cliente
+                 </Space>
+            </ReportSection>
+            */}
+
         </motion.div>
-        
-        {loading ? <div style={{textAlign: 'center', padding: 50}}><Spin size="large" /></div> : (
-          <Row gutter={[24, 24]}>
-            <Col span={24}>
-              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
-                <Card title="Evolução de Vendas no Período" className="report-card">
-                  <Line {...salesConfig} />
-                </Card>
-              </motion.div>
-            </Col>
-            <Col span={24}>
-              <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
-                <Card title="Top 10 Produtos Mais Vendidos (por Quantidade)" className="report-card">
-                    <Column {...productsConfig} />
-                </Card>
-              </motion.div>
-            </Col>
-          </Row>
-        )}
       </motion.div>
     </>
   );
 };
 
-export default ReportsPage;
+export default ReportsPagePdf; // Renomeado para evitar conflito se necessário

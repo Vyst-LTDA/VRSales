@@ -245,6 +245,58 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         
         await db.commit()
         return await get_full_order(db, id=target_order.id)
+    async def get_kitchen_orders(self, db: AsyncSession, *, current_user: User) -> List[Order]:
+        """
+        Busca todos os pedidos ABERTOS da loja, carregando os itens e detalhes.
+        Usado pelo painel KDS.
+        """
+        stmt = (
+            select(Order)
+            .where(
+                Order.store_id == current_user.store_id,
+                Order.status == OrderStatus.OPEN
+            )
+            .options(
+                # Carrega a mesa
+                selectinload(Order.table),
+                # Carrega o usuário (vendedor) - FALTAVA ISSO
+                selectinload(Order.user),
+                # Carrega os itens e os detalhes profundos do produto
+                selectinload(Order.items).joinedload(OrderItem.product).options(
+                    selectinload(Product.variations),
+                    joinedload(Product.category),
+                    joinedload(Product.subcategory),
+                    joinedload(Product.supplier)
+                )
+            )
+            .order_by(Order.created_at)
+        )
+        result = await db.execute(stmt)
+        return result.scalars().all()
+    async def update_order_item_status(self, db: AsyncSession, *, item_id: int, new_status: str, current_user: User) -> Optional[OrderItem]:
+        """
+        Atualiza o status de um item específico (ex: de 'pending' para 'ready').
+        """
+        # Busca o item garantindo que pertence à loja do usuário
+        stmt = (
+            select(OrderItem)
+            .join(Order)
+            .where(
+                OrderItem.id == item_id,
+                Order.store_id == current_user.store_id
+            )
+        )
+        result = await db.execute(stmt)
+        item = result.scalars().first()
+        
+        if item:
+            item.status = new_status
+            db.add(item)
+            await db.commit()
+            await db.refresh(item)
+        
+        return item
+
     # --- FIM DAS NOVAS FUNÇÕES ---
         
 order = CRUDOrder(Order)

@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api.endpoints import (
     super_admin, stores, attributes, categories, batches, products,
     login, users, sales, cash_register, reports, additionals,
-    customers, suppliers, ingredients, tables, orders, marketing, reservations
+    customers, suppliers, ingredients, tables, orders, marketing, reservations, walls
 )
 
 api_router = APIRouter()
@@ -20,7 +20,7 @@ api_router.include_router(reservations.router, prefix="/reservations", tags=["re
 # O prefixo foi alterado para o plural para corresponder à chamada do frontend.
 api_router.include_router(cash_register.router, prefix="/cash-registers", tags=["cash-register"])
 # -----------------------------
-
+api_router.include_router(walls.router, prefix="/walls", tags=["walls"]) # <--- ADICIONE ESTA LINHA
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(additionals.router, prefix="/additionals", tags=["additionals"])
 api_router.include_router(ingredients.router, prefix="/ingredients", tags=["ingredients"])

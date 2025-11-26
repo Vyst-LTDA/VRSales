@@ -15,7 +15,7 @@ from .crud_table import table
 from .crud_batch import batch
 from .crud_sale import sale
 from .crud_reservation import reservation # <-- LINHA ADICIONADA AQUI
-
+from .crud_wall import wall # <--- ADICIONE ESTA LINHA
 # 2. Importa os módulos CRUD que são baseados em funções, usando um alias (apelido) para facilitar o acesso.
 from . import crud_additional as additional
 from . import crud_attribute as attribute

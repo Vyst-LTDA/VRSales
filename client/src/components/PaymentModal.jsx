@@ -11,10 +11,29 @@ const PaymentModal = ({ open, onCancel, onOk, cartItems, totalAmount, customerId
   const [loading, setLoading] = useState(false);
   const [payments, setPayments] = useState([{ payment_method: 'cash', amount: 0 }]);
 
-  const totalPaid = useMemo(() => payments.reduce((acc, p) => acc + (p.amount || 0), 0), [payments]);
-  const remainingAmount = totalAmount - totalPaid;
-  const change = totalPaid > totalAmount ? totalPaid - totalAmount : 0;
+// --- INÍCIO DA CORREÇÃO ---
 
+  // 1. Esta é a nossa "Fonte da Verdade".
+  // Arredonda o valor total *apenas uma vez*.
+  const totalToPay = useMemo(() => {
+    return totalAmount > 0 ? parseFloat(totalAmount.toFixed(2)) : 0;
+  }, [totalAmount]);
+
+  const totalPaid = useMemo(() => {
+    // Garante que a soma dos pagamentos também seja arredondada
+    const sum = payments.reduce((acc, p) => acc + (p.amount || 0), 0);
+    return parseFloat(sum.toFixed(2));
+  }, [payments]);
+
+  // 2. Garante que os cálculos de 'restante' e 'troco' usem o total arredondado.
+  // Precisamos arredondar a *subtração* para evitar erros como 1.776e-15
+  const remainingAmount = parseFloat((totalToPay - totalPaid).toFixed(2));
+  
+  // 3. CORRIGIDO O ERRO DE DIGITAÇÃO: Deve ser (totalPaid - totalToPay)
+  const change = totalPaid > totalToPay ? parseFloat((totalPaid - totalToPay).toFixed(2)) : 0;
+
+  // --- FIM DA CORREÇÃO ---
+  
   useEffect(() => {
     if (open) {
       const initialAmount = totalAmount > 0 ? parseFloat(totalAmount.toFixed(2)) : 0;

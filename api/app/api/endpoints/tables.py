@@ -1,15 +1,18 @@
+# api/app/api/endpoints/tables.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-import sqlalchemy as sa  # Importação que faltava
+import sqlalchemy as sa
 
 from app.crud import crud_table
+# --- CORREÇÃO: Importar crud_reservation para usar a função de ativação
+from app.crud.crud_reservation import reservation as crud_reservation
+# -------------------------------------------------------------------
 from app.models.user import User as UserModel
 from app.models.table import Table as TableModel
 from app.models.order import Order, OrderItem
-from app.schemas.table import Table as TableSchema, TableCreate, TableUpdate, TableLayoutUpdate
+from app.schemas.table import Table as TableSchema, TableCreate, TableUpdate, TableLayoutUpdateRequest
 from app.api.dependencies import get_db, get_current_active_user, RoleChecker
 from app.schemas.enums import UserRole, OrderStatus, OrderItemStatus
 
@@ -24,7 +27,12 @@ async def read_tables(
 ) -> Any:
     """
     Busca todas as mesas da loja, incluindo informações sobre comandas abertas.
+    Também verifica e ativa reservas para o dia de hoje.
     """
+    # --- NOVO: Garante que reservas de hoje marquem as mesas como RESERVADAS ---
+    await crud_reservation.ensure_todays_reservations_are_active(db, current_user)
+    # ---------------------------------------------------------------------------
+
     stmt_tables = select(TableModel).where(TableModel.store_id == current_user.store_id)
     result_tables = await db.execute(stmt_tables)
     tables = result_tables.scalars().all()
@@ -66,14 +74,11 @@ async def read_tables(
 
         response_tables.append(table_schema)
     
-    # --- INÍCIO DA CORREÇÃO ---
-    # Esta nova lógica de ordenação cria uma "chave" de tupla (ex: (0, 5) para "5" e (1, "Varanda") para "Varanda").
-    # O Python consegue ordenar esta lista de tuplas corretamente, resolvendo o TypeError.
     response_tables.sort(key=lambda t: (0, int(t.number)) if t.number.isdigit() else (1, t.number))
-    # --- FIM DA CORREÇÃO ---
 
     return response_tables
 
+# ... (resto dos endpoints create_table, update_tables_layout, etc. permanecem iguais) ...
 
 @router.post("/", response_model=TableSchema, status_code=status.HTTP_201_CREATED, dependencies=[Depends(manager_permissions)])
 async def create_table(
@@ -88,10 +93,10 @@ async def create_table(
 async def update_tables_layout(
     *,
     db: AsyncSession = Depends(get_db),
-    tables_layout: List[TableLayoutUpdate],
+    layout_request: TableLayoutUpdateRequest,
     current_user: UserModel = Depends(get_current_active_user)
 ) -> Any:
-    return await crud_table.table.update_layout(db=db, tables_layout=tables_layout, current_user=current_user)
+    return await crud_table.table.update_layout(db=db, tables_layout=layout_request.tables, current_user=current_user)
 
 @router.put("/{table_id}", response_model=TableSchema, dependencies=[Depends(manager_permissions)])
 async def update_table(
@@ -113,9 +118,6 @@ async def delete_table(
     table_id: int,
     current_user: UserModel = Depends(get_current_active_user)
 ) -> Any:
-    """
-    Exclui uma mesa. A mesa não pode estar ocupada.
-    """
     table = await crud_table.table.get(db=db, id=table_id, current_user=current_user)
     if not table:
          raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mesa não encontrada para exclusão.")

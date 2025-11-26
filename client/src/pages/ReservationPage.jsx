@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, Badge, Modal, Form, Input, InputNumber, DatePicker, Select, Button, message, Spin, Alert, List, Popconfirm, Typography, Row, Col, Card, Space, Empty } from 'antd';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Calendar, Badge, Modal, Form, Input, InputNumber, DatePicker, Select, Button, message, Spin, List, Popconfirm, Typography, Row, Col, Card, Empty, Tooltip } from 'antd';
 import { motion } from 'framer-motion';
-import { PlusOutlined, BookOutlined, UserOutlined, ClockCircleOutlined, TeamOutlined, TableOutlined, AlignLeftOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { 
+    PlusOutlined, BookOutlined, UserOutlined, TeamOutlined, AlignLeftOutlined, 
+    CloseCircleOutlined, SunOutlined, MoonOutlined, ClockCircleOutlined 
+} from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import dayjs from 'dayjs';
 
@@ -30,14 +33,14 @@ const PageStyles = () => (
       color: white;
       box-shadow: 0 10px 30px -10px rgba(74, 0, 224, 0.5);
     }
-    
+
     .content-card {
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         border: none;
         height: 100%;
     }
-    
+
     .reservations-list .ant-list-item {
         border-bottom: 1px solid #f0f0f0;
         padding: 12px 0;
@@ -56,11 +59,25 @@ const PageStyles = () => (
         gap: 8px;
         margin-top: 24px;
     }
+    
+    .calendar-date-content {
+        position: relative;
+        padding-top: 4px;
+        height: 100%;
+    }
+    
+    .calendar-icons {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+        justify-content: flex-end;
+        font-size: 12px;
+    }
   `}</style>
 );
 
 const ReservationPage = () => {
-    const [reservations, setReservations] = useState([]);
+    const [monthReservations, setMonthReservations] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
@@ -68,27 +85,29 @@ const ReservationPage = () => {
     const [selectedDate, setSelectedDate] = useState(dayjs());
     const [formLoading, setFormLoading] = useState(false);
 
-    const fetchReservations = useCallback(async (date) => {
+    const fetchMonthReservations = useCallback(async (dateReference) => {
         setLoading(true);
         try {
-            const start = date.startOf('day').toISOString();
-            const end = date.endOf('day').toISOString();
+            const start = dateReference.startOf('month').toISOString();
+            const end = dateReference.endOf('month').toISOString();
             const response = await ApiService.get(`/reservations/?start_date=${start}&end_date=${end}`);
-            setReservations(response.data);
+            setMonthReservations(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             if (error.response?.status !== 401) {
-                message.error('Erro ao carregar reservas.');
+                message.error('Erro ao carregar reservas do mês.');
             }
             console.error("Erro ao buscar reservas:", error);
+            setMonthReservations([]);
         } finally {
             setLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        fetchReservations(selectedDate);
-    }, [selectedDate, fetchReservations]);
-    
+        fetchMonthReservations(selectedDate);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); 
+
     useEffect(() => {
         const fetchTables = async () => {
             try {
@@ -96,16 +115,81 @@ const ReservationPage = () => {
                 setTables(response.data);
             } catch (error) {
                  if (error.response?.status !== 401) {
-                    message.error("Não foi possível carregar as mesas disponíveis.");
+                    console.error("Erro ao carregar mesas:", error);
                  }
-                 console.error("Erro ao buscar mesas:", error);
             }
         };
         fetchTables();
     }, []);
 
-    const handleDateSelect = (date) => {
-        setSelectedDate(date);
+    const reservationsByDate = useMemo(() => {
+        const map = {};
+        if (Array.isArray(monthReservations)) {
+            monthReservations.forEach(r => {
+                if (r && r.reservation_time) {
+                    const dateKey = dayjs(r.reservation_time).format('YYYY-MM-DD');
+                    if (!map[dateKey]) {
+                        map[dateKey] = [];
+                    }
+                    map[dateKey].push(r);
+                }
+            });
+        }
+        return map;
+    }, [monthReservations]);
+
+    const dailyReservations = useMemo(() => {
+        const dateKey = selectedDate.format('YYYY-MM-DD');
+        const list = reservationsByDate[dateKey] || [];
+        return [...list].sort((a, b) => dayjs(a.reservation_time).unix() - dayjs(b.reservation_time).unix());
+    }, [reservationsByDate, selectedDate]);
+
+    const dateCellRender = (value) => {
+        const dateString = value.format('YYYY-MM-DD');
+        const dayReservations = reservationsByDate[dateString];
+
+        if (!dayReservations || dayReservations.length === 0) return null;
+
+        const hasEarly = dayReservations.some(r => dayjs(r.reservation_time).hour() < 18);
+        const hasLate = dayReservations.some(r => dayjs(r.reservation_time).hour() >= 18);
+
+        return (
+            <div className="calendar-date-content">
+                <Badge 
+                    count={dayReservations.length} 
+                    style={{ backgroundColor: '#52c41a' }} 
+                    offset={[10, 0]}
+                />
+                <div className="calendar-icons">
+                    {hasEarly && (
+                        <Tooltip title="Reservas até 18h">
+                            <SunOutlined style={{ color: '#fa8c16' }} />
+                        </Tooltip>
+                    )}
+                    {hasLate && (
+                        <Tooltip title="Reservas após 18h">
+                            <MoonOutlined style={{ color: '#722ed1' }} />
+                        </Tooltip>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const onPanelChange = (value) => {
+        setSelectedDate(value);
+        fetchMonthReservations(value);
+    };
+
+    const onSelect = (value) => {
+        setSelectedDate(value);
+        if (value.month() !== selectedDate.month()) {
+            fetchMonthReservations(value);
+        }
+    };
+
+    const disabledDate = (current) => {
+        return current && current < dayjs().startOf('day');
     };
 
     const handleFinish = async (values) => {
@@ -119,20 +203,19 @@ const ReservationPage = () => {
             message.success('Reserva criada com sucesso!');
             setIsModalVisible(false);
             form.resetFields();
-            fetchReservations(selectedDate);
+            fetchMonthReservations(selectedDate);
         } catch(error) {
             message.error(error.response?.data?.detail || 'Erro ao criar reserva.');
-            console.error("Erro ao criar reserva:", error.response?.data || error);
         } finally {
             setFormLoading(false);
         }
     };
-    
+
     const handleDelete = async (id) => {
         try {
             await ApiService.delete(`/reservations/${id}`);
             message.success('Reserva cancelada!');
-            fetchReservations(selectedDate); 
+            fetchMonthReservations(selectedDate);
         } catch (error) {
             message.error('Erro ao cancelar reserva.');
         }
@@ -144,7 +227,7 @@ const ReservationPage = () => {
     return (
         <>
             <PageStyles />
-            <motion.div 
+            <motion.div
                 className="reservation-page-container"
                 variants={pageVariants}
                 initial="hidden"
@@ -155,29 +238,48 @@ const ReservationPage = () => {
                         <Title level={2} style={{ color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
                             <BookOutlined /> Gestão de Reservas
                         </Title>
-                        <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setIsModalVisible(true)} size="large">
+                        {/* --- BOTÃO ATUALIZADO --- */}
+                        <Button 
+                            icon={<PlusOutlined />} 
+                            onClick={() => setIsModalVisible(true)} 
+                            size="large"
+                            style={{ 
+                                backgroundColor: 'white', 
+                                color: '#4A00E0', 
+                                border: 'none',
+                                fontWeight: 'bold',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                            }}
+                        >
                             Nova Reserva
                         </Button>
+                        {/* ----------------------- */}
                     </div>
                 </motion.div>
 
                 <Row gutter={24}>
-                    <Col xs={24} md={12}>
+                    <Col xs={24} lg={16}>
                         <motion.div variants={itemVariants}>
                             <Card className="content-card">
-                                <Calendar onSelect={handleDateSelect} value={selectedDate} />
+                                <Calendar 
+                                    value={selectedDate} 
+                                    onSelect={onSelect}
+                                    onPanelChange={onPanelChange}
+                                    cellRender={dateCellRender}
+                                    disabledDate={disabledDate}
+                                />
                             </Card>
                         </motion.div>
                     </Col>
-                    <Col xs={24} md={12}>
+                    <Col xs={24} lg={8}>
                          <motion.div variants={itemVariants}>
                             <Card className="content-card">
-                                <Title level={4} style={{ marginBottom: 20 }}>Reservas para {selectedDate.format('DD/MM/YYYY')}</Title>
+                                <Title level={4} style={{ marginBottom: 20 }}>Reservas em {selectedDate.format('DD/MM')}</Title>
                                 {loading ? <div style={{textAlign: 'center', padding: '50px'}}><Spin /></div> : (
                                     <List
                                         className="reservations-list"
-                                        dataSource={reservations}
-                                        locale={{ emptyText: <Empty description="Nenhuma reserva para esta data."/>}}
+                                        dataSource={dailyReservations} 
+                                        locale={{ emptyText: <Empty description="Nenhuma reserva para este dia."/>}}
                                         renderItem={item => (
                                             <List.Item actions={[
                                                 <Popconfirm title="Cancelar reserva?" onConfirm={() => handleDelete(item.id)} okText="Sim" cancelText="Não">
@@ -185,8 +287,13 @@ const ReservationPage = () => {
                                                 </Popconfirm>
                                             ]}>
                                                 <List.Item.Meta
-                                                    title={<Text strong>{item.customer_name} - {dayjs(item.reservation_time).format('HH:mm')}</Text>}
-                                                    description={`Mesa: ${item.table?.number || '?'} | ${item.number_of_people} pessoas`}
+                                                    title={<Text strong>{item.customer_name}</Text>}
+                                                    description={
+                                                        <div style={{display: 'flex', flexDirection: 'column'}}>
+                                                            <Text type="secondary"><ClockCircleOutlined /> {dayjs(item.reservation_time).format('HH:mm')}</Text>
+                                                            <Text type="secondary">Mesa: {item.table?.number || '?'} | {item.number_of_people} pessoas</Text>
+                                                        </div>
+                                                    }
                                                 />
                                             </List.Item>
                                         )}
@@ -196,44 +303,51 @@ const ReservationPage = () => {
                          </motion.div>
                     </Col>
                 </Row>
-                
-                <Modal 
-                    title="Nova Reserva" 
-                    open={isModalVisible} 
-                    onCancel={() => setIsModalVisible(false)} 
+
+                <Modal
+                    title="Nova Reserva"
+                    open={isModalVisible}
+                    onCancel={() => setIsModalVisible(false)}
                     footer={null}
                     destroyOnClose
                     width={600}
                 >
                     {isModalVisible && (
-                        <Form 
-                            form={form} 
-                            layout="vertical" 
-                            onFinish={handleFinish} 
+                        <Form
+                            form={form}
+                            layout="vertical"
+                            onFinish={handleFinish}
                             initialValues={{ reservation_time: selectedDate.hour(19).minute(0), number_of_people: 2 }}
                         >
-                            <Form.Item name="customer_name" label="Nome do Cliente" rules={[{ required: true }]}>
+                            <Form.Item name="customer_name" label="Nome do Cliente" rules={[{ required: true, message: 'Nome é obrigatório' }]}>
                                 <Input size="large" prefix={<UserOutlined />} />
                             </Form.Item>
                             <Row gutter={16}>
                                 <Col span={12}>
-                                    <Form.Item name="reservation_time" label="Data e Hora" rules={[{ required: true }]}>
-                                        <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" size="large" />
+                                    <Form.Item name="reservation_time" label="Data e Hora" rules={[{ required: true, message: 'Data/Hora é obrigatória' }]}>
+                                        <DatePicker 
+                                            showTime 
+                                            style={{ width: '100%' }} 
+                                            format="DD/MM/YYYY HH:mm" 
+                                            size="large" 
+                                            disabledDate={disabledDate} 
+                                        />
                                     </Form.Item>
                                 </Col>
                                 <Col span={12}>
-                                    <Form.Item name="number_of_people" label="Nº de Pessoas" rules={[{ required: true }]}>
+                                    <Form.Item name="number_of_people" label="Nº de Pessoas" rules={[{ required: true, message: 'Número de pessoas é obrigatório' }]}>
                                         <InputNumber min={1} style={{ width: '100%' }} size="large" prefix={<TeamOutlined />}/>
                                     </Form.Item>
                                 </Col>
                             </Row>
-                            {/* --- INÍCIO DA CORREÇÃO --- */}
-                            <Form.Item name="table_id" label="Mesa Designada" rules={[{ required: true }]}>
+                            <Form.Item name="table_id" label="Mesa Designada" rules={[{ required: true, message: 'Selecione a mesa' }]}>
                                 <Select placeholder="Selecione uma mesa disponível" size="large">
-                                    {tables.filter(t => t.status === 'available').map(t => <Option key={t.id} value={t.id}>{t.number}</Option>)}
+                                    {tables.filter(t => t.status === 'available').map(t => <Option key={t.id} value={t.id}>{t.number} (Cap: {t.capacity})</Option>)}
                                 </Select>
                             </Form.Item>
-                            {/* --- FIM DA CORREÇÃO --- */}
+                            <Form.Item name="phone_number" label="Telefone (Opcional)">
+                                <Input size="large" placeholder="(XX) XXXXX-XXXX"/>
+                            </Form.Item>
                             <Form.Item name="notes" label="Observações (Opcional)">
                                 <Input.TextArea rows={2} prefix={<AlignLeftOutlined />} />
                             </Form.Item>

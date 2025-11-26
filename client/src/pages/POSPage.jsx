@@ -1,3 +1,5 @@
+// vyst-ltda/vrsales/VRSales-9c6c4fe15fb6b0affb34c6862f8639045de57ee6/client/src/pages/POSPage.jsx
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Layout, Input, Table, Avatar, Typography, Statistic, Button, Space, Divider, message, Modal, Image, Card, Spin, Tooltip, Empty, AutoComplete, Select, Form
@@ -203,9 +205,28 @@ const PageStyles = () => (
         transform: translateY(-2px);
         box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
     }
-    .action-buttons .ant-btn-primary { background: var(--primary-color); }
-    .action-buttons .ant-btn-dangerous { background: var(--danger-color); color: white !important; }
-    .action-buttons .ant-btn-dangerous:hover { background: #ff4d4f; }
+
+    /* --- INÍCIO DA CORREÇÃO --- */
+    .action-buttons .ant-btn-primary {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        color: white !important; /* Garante o contraste do texto */
+    }
+    .action-buttons .ant-btn-primary:hover {
+        background: #0065ff; /* Tom mais claro de azul para hover */
+        border-color: #0065ff;
+    }
+    .action-buttons .ant-btn-dangerous {
+        background: var(--danger-color);
+        border-color: var(--danger-color); /* Garante a cor da borda */
+        color: white !important;
+    }
+    .action-buttons .ant-btn-dangerous:hover {
+        background: #ff4d4f;
+        border-color: #ff4d4f; /* Garante a cor da borda no hover */
+    }
+    /* --- FIM DA CORREÇÃO --- */
+
     .action-button-key {
         font-weight: 700; margin-right: 8px; padding: 2px 6px;
         border-radius: 4px; background: rgba(0,0,0,0.05); color: var(--text-secondary);
@@ -264,15 +285,12 @@ const POSPage = () => {
   const debouncedCustomerSearch = useDebounce(customerSearchValue, 300);
 
   const handleOpenPaymentModal = useCallback(() => {
-    if (cartItems.length === 0) {
-      message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
-      return;
-    }
+    // A verificação de carrinho vazio será movida para quem chama a função
     setIsPaymentModalOpen(true);
-  }, [cartItems]);
+  }, []); // <-- Dependência vazia
 
   const handleCancelSale = useCallback(() => {
-    if (cartItems.length === 0) return;
+    // A verificação de carrinho vazio será movida para quem chama a função
     Modal.confirm({
       title: 'Tem certeza?',
       content: 'Todos os itens serão removidos do carrinho e o cliente desassociado.',
@@ -290,7 +308,7 @@ const POSPage = () => {
         searchInputRef.current?.focus();
       },
     });
-  }, [cartItems]);
+  }, []); // <-- Dependência vazia
 
   useEffect(() => {
     const checkCashRegister = async () => {
@@ -319,11 +337,23 @@ const POSPage = () => {
     }
   }, [location, navigate]);
 
-  useEffect(() => {
+ useEffect(() => {
     searchInputRef.current?.focus();
     const handleKeyDown = (event) => {
-      if (event.key === 'F6') { event.preventDefault(); handleOpenPaymentModal(); }
-      if (event.key === 'F3') { event.preventDefault(); handleCancelSale(); }
+      // Agora, a verificação é feita AQUI, com o valor mais recente do cartItems
+      if (event.key === 'F6') {
+        event.preventDefault();
+        if (cartItems.length === 0) {
+          message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
+          return;
+        }
+        handleOpenPaymentModal();
+      }
+      if (event.key === 'F3') {
+        event.preventDefault();
+        if (cartItems.length === 0) return; // Se o carrinho estiver vazio, não faz nada
+        handleCancelSale();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     const timer = setInterval(() => setCurrentTime(dayjs().format('DD/MM/YYYY HH:mm:ss')), 1000);
@@ -331,8 +361,7 @@ const POSPage = () => {
       window.removeEventListener('keydown', handleKeyDown);
       clearInterval(timer);
     };
-  }, [handleCancelSale, handleOpenPaymentModal]);
-
+  }, [cartItems.length, handleCancelSale, handleOpenPaymentModal]); // <-- Adicionamos cartItems.length
   const fetchProducts = useCallback(async (searchTerm = '') => {
     setSearchLoading(true);
     try {
@@ -723,11 +752,35 @@ const POSPage = () => {
                   </div>
                   <Divider style={{ margin: '16px 0' }}/>
                   <Space direction="vertical" style={{ width: '100%' }} size="middle" className="action-buttons">
-                      <Button type="primary" size="large" icon={<DollarCircleOutlined />} block onClick={handleOpenPaymentModal} disabled={cartItems.length === 0}>
-                          <span className="action-button-key">F6</span> FINALIZAR
+                      <Button
+  type="primary"
+  size="large"
+  icon={<DollarCircleOutlined />}
+  block
+  onClick={() => {
+    if (cartItems.length === 0) {
+      message.error('Adicione pelo menos um item ao carrinho para finalizar a venda.');
+      return;
+    }
+    handleOpenPaymentModal();
+  }}
+  disabled={cartItems.length === 0}
+>
+  <span className="action-button-key">F6</span> FINALIZAR
                       </Button>
-                      <Button danger size="large" icon={<CloseCircleOutlined />} block onClick={handleCancelSale} disabled={cartItems.length === 0}>
-                          <span className="action-button-key">F3</span> CANCELAR
+                      <Button
+  danger
+  size="large"
+  icon={<CloseCircleOutlined />}
+  block
+  onClick={() => {
+    if (cartItems.length > 0) { // Só chama se o carrinho não estiver vazio
+      handleCancelSale();
+    }
+  }}
+  disabled={cartItems.length === 0}
+>
+  <span className="action-button-key">F3</span> CANCELAR
                       </Button>
                   </Space>
               </div>

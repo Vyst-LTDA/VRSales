@@ -14,3 +14,7 @@ requests
 loguru>=0.7.0
 pydantic[email]
 python-multipart
+fpdf2
+reportlab
+fastapi-mail
+twilio

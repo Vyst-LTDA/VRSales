@@ -7,6 +7,8 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
+# A variável ACCESS_TOKEN_EXPIRE_MINUTES ainda existe nas configurações,
+# mas não será usada na criação do token abaixo.
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -15,22 +17,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
-# --- INÍCIO DA CORREÇÃO ---
-# A assinatura da função já esperava um dicionário (data: dict),
-# mas agora a chamada em login.py está correta.
 def create_access_token(data: Dict[str, Any], expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
+    # --- REMOÇÃO DA EXPIRAÇÃO ---
+    # As linhas abaixo que definiam e adicionavam o campo 'exp' foram comentadas/removidas.
+    # if expires_delta:
+    #     expire = datetime.now(timezone.utc) + expires_delta
+    # else:
+    #     # Define um tempo de expiração padrão muito longo (ex: 10 anos) ou remove completamente
+    #     # expire = datetime.now(timezone.utc) + timedelta(days=365*10) # Exemplo: 10 anos
+    #     pass # Ou simplesmente não define 'exp'
+    # to_encode.update({"exp": expire}) # Linha removida/comentada
+    # --- FIM DA REMOÇÃO ---
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-# --- FIM DA CORREÇÃO ---
 
 def decode_access_token(token: str) -> dict | None:
     try:
+        # Ao decodificar, não precisamos mais verificar a expiração aqui,
+        # a biblioteca 'jose' pode fazer isso se 'exp' estiver presente,
+        # mas como removemos, ele não será verificado.
+        # Opções como 'options={"verify_exp": False}' poderiam ser usadas se
+        # quiséssemos explicitamente ignorar a expiração caso ela existisse.
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.JWTError:
