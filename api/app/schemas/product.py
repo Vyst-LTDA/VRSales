@@ -32,6 +32,7 @@ class ProductBase(BaseSchema):
     subcategory_id: Optional[int] = None
     supplier_id: Optional[int] = Field(None, description="ID do fornecedor principal.") # <-- NOVO
     product_type: ProductType = Field(default=ProductType.SIMPLE, description="Tipo do produto.") # <-- NOVO
+    send_to_kitchen: bool = Field(default=False, description="Enviar para o painel da cozinha?")
 
     # Validator mantido
     @validator('name', pre=True, always=True)
@@ -63,6 +64,7 @@ class ProductUpdate(BaseSchema): # Herda de BaseSchema para ter validações bas
     subcategory_id: Optional[int] = None
     supplier_id: Optional[int] = None # <-- NOVO
     product_type: Optional[ProductType] = None # <-- NOVO
+    send_to_kitchen: Optional[bool] = None # Restaurado
 
 # =====================================================================================
 # Schema para Leitura/Retorno de Produto da API

@@ -1,5 +1,5 @@
 # /api/app/models/product.py
-from sqlalchemy import String, Float, Integer, DateTime, func, ForeignKey, Enum as SQLAlchemyEnum
+from sqlalchemy import String, Float, Integer, DateTime, func, ForeignKey, Enum as SQLAlchemyEnum, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from typing import List, Optional
@@ -40,6 +40,7 @@ class Product(Base):
     # --- NOVO CAMPO: Tipo de Produto ---
     product_type: Mapped[ProductType] = mapped_column(SQLAlchemyEnum(ProductType, name="producttype", create_type=False), default=ProductType.SIMPLE, server_default=ProductType.SIMPLE.value)
     # --- FIM NOVO CAMPO ---
+    send_to_kitchen: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     # --- Chaves Estrangeiras ---
     category_id: Mapped[Optional[int]] = mapped_column(ForeignKey("product_categories.id"))

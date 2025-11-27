@@ -1,21 +1,22 @@
-// client/src/components/ProductForm.jsx
 import React, { useEffect, useState } from 'react';
-import { Form, Input, InputNumber, Button, message, Row, Col, Select, DatePicker} from 'antd'; // Adicionado Select
-import {AppstoreOutlined, AlignLeftOutlined, DollarCircleOutlined, DropboxOutlined, WarningOutlined, BarcodeOutlined, LinkOutlined, ShopOutlined, CalendarOutlined}
-from '@ant-design/icons';
+import { Form, Input, InputNumber, Button, message, Row, Col, Select, Switch, DatePicker } from 'antd';
+import {
+    AppstoreOutlined, DollarCircleOutlined, DropboxOutlined,
+    WarningOutlined, BarcodeOutlined, LinkOutlined
+} from '@ant-design/icons';
 import ApiService from '../api/ApiService';
-import dayjs from 'dayjs';
 
-const { Option } = Select; // Adicionado Option
+const { Option } = Select;
 
 const ProductForm = ({ product, onSuccess, onCancel }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
-    const [suppliers, setSuppliers] = useState([]); // Estado para fornecedores
-    const [loadingSuppliers, setLoadingSuppliers] = useState(false); // Estado de loading
+    const [suppliers, setSuppliers] = useState([]);
+    const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+    
+    // Verifica se é modo de edição (se 'product' existe)
     const isEditing = !!product;
 
-    // Busca fornecedores quando o modal é aberto (se não tiverem sido carregados)
     useEffect(() => {
         const fetchSuppliers = async () => {
             setLoadingSuppliers(true);
@@ -28,43 +29,45 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                 setLoadingSuppliers(false);
             }
         };
-        // Só busca se o modal estiver visível E a lista estiver vazia
         if (suppliers.length === 0) {
             fetchSuppliers();
         }
-    }, [suppliers.length]); // Depende apenas do tamanho da lista
+    }, [suppliers.length]);
 
-
-    // Preenche o formulário ao editar ou reseta ao criar
     useEffect(() => {
         if (isEditing && product) {
             form.setFieldsValue({
                 ...product,
                 price: product.price !== undefined ? Number(product.price) : undefined,
-                cost_price: product.cost_price !== undefined && product.cost_price !== null ? Number(product.cost_price) : undefined, // <-- NOVO
+                cost_price: product.cost_price !== undefined && product.cost_price !== null ? Number(product.cost_price) : undefined,
                 stock: product.stock !== undefined ? Number(product.stock) : undefined,
                 low_stock_threshold: product.low_stock_threshold !== undefined ? Number(product.low_stock_threshold) : 10,
-                supplier_id: product.supplier?.id || product.supplier_id // <-- NOVO (usa o ID do objeto supplier se carregado)
+                supplier_id: product.supplier?.id || product.supplier_id,
+                send_to_kitchen: product.send_to_kitchen // Carrega o valor do switch
             });
         } else {
-            form.resetFields(); // Limpa tudo para criação
+            form.resetFields();
         }
     }, [product, form, isEditing]);
 
     const onFinish = async (values) => {
         setLoading(true);
         try {
-            // Garante que valores numéricos sejam números
             const apiValues = {
                 ...values,
                 price: values.price !== undefined && values.price !== null ? Number(values.price) : 0,
-                cost_price: values.cost_price !== undefined && values.cost_price !== null ? Number(values.cost_price) : null, // <-- NOVO (permite null)
+                cost_price: values.cost_price !== undefined && values.cost_price !== null ? Number(values.cost_price) : null,
                 stock: values.stock !== undefined && values.stock !== null ? Number(values.stock) : 0,
                 low_stock_threshold: values.low_stock_threshold !== undefined && values.low_stock_threshold !== null ? Number(values.low_stock_threshold) : 10,
-                supplier_id: values.supplier_id || null // <-- NOVO (envia null se não selecionado)
+                supplier_id: values.supplier_id || null,
+                send_to_kitchen: !!values.send_to_kitchen,
+                // Formata a data para YYYY-MM-DD se ela existir
+                expiration_date: values.expiration_date ? values.expiration_date.format('YYYY-MM-DD') : null
             };
 
             if (isEditing) {
+                // Na edição, não enviamos expiration_date, pois é tratado via lotes separados
+                delete apiValues.expiration_date;
                 await ApiService.updateProduct(product.id, apiValues);
             } else {
                 await ApiService.createProduct(apiValues);
@@ -79,7 +82,6 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
     };
 
     return (
-        // Não precisa mais de initialValues aqui se usamos setFieldsValue
         <Form form={form} layout="vertical" onFinish={onFinish}>
             <Form.Item name="name" label="Nome do Produto" rules={[{ required: true, message: 'Insira o nome!' }]}>
                 <Input size="large" prefix={<AppstoreOutlined />} placeholder="Ex: Coca-Cola 2L" />
@@ -95,16 +97,13 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                         <InputNumber size="large" style={{ width: '100%' }} min={0} step={0.01} precision={2} prefix="R$" />
                     </Form.Item>
                 </Col>
-                {/* --- NOVO CAMPO: Preço de Custo --- */}
                 <Col xs={24} sm={12}>
                      <Form.Item name="cost_price" label="Preço de Custo (Opcional)">
                         <InputNumber size="large" style={{ width: '100%' }} min={0} step={0.01} precision={2} prefix="R$" />
                     </Form.Item>
                 </Col>
-                 {/* --- FIM NOVO CAMPO --- */}
             </Row>
 
-             {/* --- NOVO CAMPO: Fornecedor --- */}
              <Form.Item name="supplier_id" label="Fornecedor (Opcional)">
                 <Select
                     showSearch
@@ -114,14 +113,10 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                     filterOption={(input, option) =>
                         (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                     }
-                    options={suppliers.map(s => ({ value: s.id, label: s.name }))} // Formato para Antd v5+
+                    options={suppliers.map(s => ({ value: s.id, label: s.name }))}
                     size="large"
-                >
-                    {/* Options são geradas a partir da prop 'options' */}
-                </Select>
+                />
             </Form.Item>
-             {/* --- FIM NOVO CAMPO --- */}
-
 
             <Row gutter={16}>
                 <Col xs={24} sm={12}>
@@ -138,7 +133,7 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
 
             <Row gutter={16}>
                 <Col xs={24} sm={12}>
-                    <Form.Item name="stock" label="Estoque Atual" rules={[{ required: true, message: 'Insira o estoque!' }]}>
+                    <Form.Item name="stock" label="Estoque Inicial" rules={[{ required: true, message: 'Insira o estoque!' }]}>
                         <InputNumber size="large" style={{ width: '100%' }} prefix={<DropboxOutlined />} />
                     </Form.Item>
                 </Col>
@@ -148,19 +143,46 @@ const ProductForm = ({ product, onSuccess, onCancel }) => {
                     </Form.Item>
                 </Col>
             </Row>
+            
+            {/* --- CAMPO DE VALIDADE (Só aparece ao criar) --- */}
+            {!isEditing && (
+                <Form.Item 
+                    name="expiration_date" 
+                    label="Data de Validade (Lote Inicial)"
+                    tooltip="Se preenchido, cria automaticamente um lote com esta validade."
+                >
+                    <DatePicker 
+                        style={{ width: '100%' }} 
+                        size="large" 
+                        format="DD/MM/YYYY"
+                        placeholder="Selecione a validade"
+                    />
+                </Form.Item>
+            )}
 
-
-            {/* TODO: Adicionar campos para Categoria/Subcategoria e Tipo de Produto */}
-
-
-            <div className="product-form-buttons">
-                <Button onClick={onCancel} size="large">
-                    Cancelar
-                </Button>
-                <Button type="primary" htmlType="submit" loading={loading} size="large">
-                    {isEditing ? 'Salvar Alterações' : 'Criar Produto'}
-                </Button>
-            </div>
+            {/* --- RODAPÉ: Switch e Botões na mesma linha --- */}
+            <Row align="bottom" justify="space-between" style={{ marginTop: 24 }}>
+                <Col>
+                    <Form.Item 
+                        name="send_to_kitchen" 
+                        label="Enviar para Cozinha?" 
+                        valuePropName="checked"
+                        style={{ marginBottom: 0 }} // Remove margem inferior para alinhar com botões
+                    >
+                        <Switch checkedChildren="Sim" unCheckedChildren="Não" />
+                    </Form.Item>
+                </Col>
+                <Col>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <Button onClick={onCancel} size="large">
+                            Cancelar
+                        </Button>
+                        <Button type="primary" htmlType="submit" loading={loading} size="large">
+                            {isEditing ? 'Salvar Alterações' : 'Criar Produto'}
+                        </Button>
+                    </div>
+                </Col>
+            </Row>
         </Form>
     );
 };
