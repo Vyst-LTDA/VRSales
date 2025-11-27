@@ -83,7 +83,9 @@ const ApiService = {
   createProduct: (productData) => ApiService.post('/products/', productData),
   updateProduct: (productId, productData) => ApiService.put(`/products/${productId}`, productData),
   deleteProduct: (productId) => ApiService.delete(`/products/${productId}`),
-
+  
+  // A FUNÇÃO QUE FALTAVA PARA O ESTOQUE FUNCIONAR:
+  adjustStock: (productId, data) => ApiService.post(`/products/${productId}/stock-adjustment`, data),
   // Vendas (Sales) - para finalizar o pagamento
   createSale: (saleData) => ApiService.post('/sales/', saleData),
 
@@ -102,7 +104,8 @@ const ApiService = {
   createCustomer: (customerData) => ApiService.post('/customers/', customerData),
   // Adicione a função que faltava para buscar histórico do cliente
   getCustomerSalesHistory: (customerId) => ApiService.get(`/customers/${customerId}/sales`),
-
+  getCategories: () => ApiService.get('/categories/'),
+  createCategory: (data) => ApiService.post('/categories/', data),
   getHeldOrders: () => ApiService.get('/orders/pos/held'),
   holdOrder: (orderId) => ApiService.patch(`/orders/${orderId}/hold`),
   resumeOrder: (orderId) => ApiService.patch(`/orders/${orderId}/resume`),

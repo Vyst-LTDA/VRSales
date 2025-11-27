@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.order import Order # Para fechar o pedido
 from app.schemas.enums import OrderStatus # Para o status CLOSED
 # -------------------------
+from app.models.category import ProductCategory
 from app.schemas.sale import SaleCreate, SaleUpdate
 
 from app.services.crm_service import crm_service
@@ -27,7 +28,12 @@ from app.services.cash_register_service import cash_register_service
 async def get_full_sale(db: AsyncSession, *, id: int) -> Optional[Sale]:
     stmt = select(Sale).where(Sale.id == id).options(
         selectinload(Sale.items).options(
-            joinedload(SaleItemModel.product)
+            # --- CORREÇÃO: Carregamento Profundo ---
+            joinedload(SaleItemModel.product).options(
+                joinedload(Product.category).selectinload(ProductCategory.subcategories),
+                joinedload(Product.subcategory)
+            )
+            # ---------------------------------------
         ),
         selectinload(Sale.payments),
         selectinload(Sale.customer),
@@ -55,7 +61,12 @@ class CRUDSale(CRUDBase[Sale, SaleCreate, SaleUpdate]):
             select(self.model)
             .where(self.model.store_id == current_user.store_id)
             .options(
-                selectinload(self.model.items).options(selectinload(SaleItemModel.product)),
+                selectinload(self.model.items).options(
+                    # --- CORREÇÃO AQUI TAMBÉM ---
+                    selectinload(SaleItemModel.product).options(
+                        joinedload(Product.category).selectinload(ProductCategory.subcategories)
+                    )
+                ),
                 selectinload(self.model.customer),
                 selectinload(self.model.user),
                 selectinload(self.model.payments)

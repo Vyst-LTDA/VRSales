@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Any, Optional
-
+from sqlalchemy.exc import IntegrityError
 from app import crud
 from app.models.user import User as UserModel
 from app.schemas.product import Product as ProductSchema, ProductCreate, ProductUpdate
@@ -66,12 +66,31 @@ async def update_product( *, db: AsyncSession = Depends(get_db), product_id: int
     return await crud.product.update(db=db, db_obj=db_product, obj_in=product_in, current_user=current_user)
 
 @router.delete("/{product_id}", response_model=ProductSchema, dependencies=[Depends(manager_permissions)], summary="Deletar um produto")
-async def delete_product( *, db: AsyncSession = Depends(get_db), product_id: int, current_user: UserModel = Depends(get_current_active_user) ) -> Any:
+async def delete_product(
+    *,
+    db: AsyncSession = Depends(get_db),
+    product_id: int,
+    current_user: UserModel = Depends(get_current_active_user)
+) -> Any:
+    """ Remove um produto do sistema. """
     product_to_delete = await crud.product.get(db, id=product_id, current_user=current_user)
     if not product_to_delete:
          raise HTTPException( status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado." )
-    deleted_product = await crud.product.remove(db=db, id=product_id, current_user=current_user)
-    return deleted_product
+    
+    try:
+        deleted_product = await crud.product.remove(db=db, id=product_id, current_user=current_user)
+        return deleted_product
+    except IntegrityError:
+        # Se der erro de integridade (FK), faz rollback e avisa
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível excluir este produto pois ele possui histórico de vendas ou pedidos. Considere apenas zerar o estoque ou editar o nome para 'INATIVO'."
+        )
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Erro ao excluir produto: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao excluir produto.")
 
 @router.post("/{product_id}/stock-adjustment", status_code=status.HTTP_200_OK, dependencies=[Depends(manager_permissions)], summary="Ajustar o estoque de um produto")
 async def adjust_product_stock(

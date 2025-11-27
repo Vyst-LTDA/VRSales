@@ -16,6 +16,10 @@ from app.models.user import User
 from app.models.table import Table
 from app.models.sale import Sale, SaleItem as SaleItemModel
 from app.models.payment import Payment
+# --- IMPORTAÇÕES NECESSÁRIAS PARA O CARREGAMENTO ---
+from app.models.category import ProductCategory
+from app.models.variation import ProductVariation
+# ---------------------------------------------------
 from app.schemas.enums import TableStatus, OrderStatus, OrderType
 from app.schemas.order import OrderCreate, OrderUpdate, OrderItemCreate, PartialPaymentRequest, OrderMerge, OrderTransfer
 from app.services.cash_register_service import cash_register_service
@@ -23,10 +27,15 @@ from app.services.crm_service import crm_service
 from app.services.stock_service import stock_service
 
 async def get_full_order(db: AsyncSession, *, id: int) -> Optional[Order]:
-    """ Carrega uma comanda com todos os seus relacionamentos. """
+    """ Carrega uma comanda com todos os seus relacionamentos profundos. """
     stmt = select(Order).where(Order.id == id).options(
-        selectinload(Order.items).options(
-            joinedload(OrderItem.product)
+        # Carregamento profundo dos itens
+        selectinload(Order.items).joinedload(OrderItem.product).options(
+            # Carrega Categoria E Subcategorias (Correção do Erro)
+            joinedload(Product.category).selectinload(ProductCategory.subcategories),
+            joinedload(Product.subcategory),
+            joinedload(Product.supplier),
+            selectinload(Product.variations)
         ),
         selectinload(Order.table),
         selectinload(Order.user),
@@ -36,30 +45,25 @@ async def get_full_order(db: AsyncSession, *, id: int) -> Optional[Order]:
     return result.scalars().first()
 
 def _run_sync_post_sale_services(db_session: Session, *, sale: Sale):
-    """
-    Executa os serviços síncronos de forma segura e atômica.
-    """
+    """ Executa os serviços síncronos de forma segura e atômica. """
     sync_sale = db_session.merge(sale)
-    
     cash_register_service.add_sale_transaction(db_session, sale=sync_sale)
     crm_service.update_customer_stats_from_sale(db_session, sale=sync_sale)
     stock_service.deduct_stock_from_sale(db_session, sale=sync_sale)
-    
     db_session.commit()
 
 
 class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
 
     async def process_partial_payment(self, db: AsyncSession, *, order_id: int, payment_request: PartialPaymentRequest, current_user: User) -> Order:
+        # ... (Mantenha a lógica de pagamento igual, ela chama get_full_order que já corrigimos) ...
         logger.info(f"Iniciando pagamento para comanda ID: {order_id} pelo usuário ID: {current_user.id}")
         
         order = await get_full_order(db, id=order_id)
         
         if not order or order.store_id != current_user.store_id:
-            logger.error(f"FALHA: Comanda ID {order_id} não encontrada.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comanda não encontrada.")
         if order.status != OrderStatus.OPEN:
-            logger.error(f"FALHA: Tentativa de pagar comanda ID {order_id} com status '{order.status}'.")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Esta comanda não está mais aberta.")
 
         total_to_pay_decimal = Decimal("0.0")
@@ -68,15 +72,12 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
 
         for item_to_pay in payment_request.items_to_pay:
             order_item = next((i for i in order.items if i.id == item_to_pay.order_item_id), None)
-            
             if not order_item:
-                logger.error(f"FALHA: Item de comanda ID {item_to_pay.order_item_id} não encontrado.")
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item com ID {item_to_pay.order_item_id} não encontrado na comanda.")
 
             available_quantity = order_item.quantity - order_item.paid_quantity
             if item_to_pay.quantity > available_quantity:
-                logger.error(f"FALHA: Tentativa de pagar {item_to_pay.quantity} de '{order_item.product.name}', mas apenas {available_quantity} estão disponíveis.")
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Quantidade a pagar ({item_to_pay.quantity}) para o item '{order_item.product.name}' é maior que a quantidade pendente ({available_quantity}).")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Quantidade a pagar maior que a pendente.")
 
             order_item.paid_quantity += item_to_pay.quantity
             items_to_update_in_order.append(order_item)
@@ -96,8 +97,7 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         total_paid_amount = sum(p.amount for p in payment_request.payments)
 
         if total_paid_amount < total_to_pay_float:
-            logger.error(f"FALHA: Valor pago (R$ {total_paid_amount}) é menor que o total dos itens (R$ {total_to_pay_float}).")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Valor pago (R$ {total_paid_amount}) é menor que o total dos itens selecionados (R$ {total_to_pay_float}).")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Valor pago insuficiente.")
 
         db_sale = Sale(
             total_amount=total_to_pay_float,
@@ -117,24 +117,46 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
             if order.table:
                 order.table.status = TableStatus.AVAILABLE
                 db.add(order.table)
-            logger.info(f"Comanda ID {order.id} totalmente paga. Liberando a mesa {order.table_id}.")
 
         await db.commit()
         await db.refresh(db_sale)
-
-        logger.info(f"Venda (Sale) ID {db_sale.id} criada a partir da comanda. Executando serviços de pós-venda...")
         await db.run_sync(_run_sync_post_sale_services, sale=db_sale)
-        logger.info("Serviços de pós-venda concluídos.")
         
         return await get_full_order(db, id=order.id)
     
     async def get_open_order_by_table(self, db: AsyncSession, *, table_id: int, current_user: User) -> Optional[Order]:
-        stmt = ( select(Order).where(Order.store_id == current_user.store_id, Order.table_id == table_id, Order.status == OrderStatus.OPEN).options(selectinload(Order.items).selectinload(OrderItem.product), selectinload(Order.customer)))
+        stmt = (
+            select(Order)
+            .where(Order.store_id == current_user.store_id, Order.table_id == table_id, Order.status == OrderStatus.OPEN)
+            .options(
+                # Carregamento Profundo para evitar MissingGreenlet
+                selectinload(Order.items).joinedload(OrderItem.product).options(
+                    joinedload(Product.category).selectinload(ProductCategory.subcategories),
+                    joinedload(Product.subcategory),
+                    joinedload(Product.supplier),
+                    selectinload(Product.variations)
+                ), 
+                selectinload(Order.customer)
+            )
+        )
         result = await db.execute(stmt)
         return result.scalars().first()
 
     async def get_open_pos_order(self, db: AsyncSession, *, current_user: User) -> Optional[Order]:
-        stmt = ( select(Order).where(Order.store_id == current_user.store_id, Order.status == OrderStatus.OPEN, Order.order_type == OrderType.TAKEOUT, Order.table_id == None).options(selectinload(Order.items).selectinload(OrderItem.product), selectinload(Order.customer)))
+        stmt = (
+            select(Order)
+            .where(Order.store_id == current_user.store_id, Order.status == OrderStatus.OPEN, Order.order_type == OrderType.TAKEOUT, Order.table_id == None)
+            .options(
+                # Carregamento Profundo para evitar MissingGreenlet
+                selectinload(Order.items).joinedload(OrderItem.product).options(
+                    joinedload(Product.category).selectinload(ProductCategory.subcategories),
+                    joinedload(Product.subcategory),
+                    joinedload(Product.supplier),
+                    selectinload(Product.variations)
+                ), 
+                selectinload(Order.customer)
+            )
+        )
         result = await db.execute(stmt)
         return result.scalars().first()
 
@@ -147,13 +169,20 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         return order
 
     async def add_item_to_order(self, db: AsyncSession, *, order: Order, item_in: OrderItemCreate, current_user: User) -> Order:
+        # A lógica permanece a mesma, mas garantimos que o retorno (no endpoint) chame get_full_order
         if order.status != OrderStatus.OPEN:
             raise HTTPException(status_code=400, detail="A comanda não está aberta.")
         product = await db.get(Product, item_in.product_id)
         if not product or product.store_id != current_user.store_id:
             raise HTTPException(status_code=404, detail="Produto não encontrado.")
-        await db.refresh(order, attribute_names=['items'])
+        
+        # Usa selectinload para garantir que items estejam carregados antes de iterar
+        stmt = select(Order).where(Order.id == order.id).options(selectinload(Order.items))
+        result = await db.execute(stmt)
+        order = result.scalars().first()
+
         existing_item = next((item for item in order.items if item.product_id == item_in.product_id and (item.notes or '') == (item_in.notes or '')), None)
+        
         if existing_item:
             new_quantity = existing_item.quantity + item_in.quantity
             if new_quantity > 0:
@@ -164,8 +193,10 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         elif item_in.quantity > 0:
             new_item = OrderItem(order_id=order.id, product_id=item_in.product_id, quantity=item_in.quantity, price_at_order=product.price, notes=item_in.notes)
             db.add(new_item)
+        
         await db.commit()
-        return await get_full_order(db, id=order.id)
+        # O retorno final é tratado pelo endpoint chamando get_full_order
+        return order 
     
     async def cancel_order(self, db: AsyncSession, *, order: Order, current_user: User) -> Order:
         if order.status != OrderStatus.OPEN:
@@ -183,7 +214,12 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         return order
 
     async def get_for_user(self, db: AsyncSession, *, id: int, current_user: User) -> Optional[Order]:
-        stmt = select(Order).filter(Order.id == id, Order.store_id == current_user.store_id)
+        # Adicionado options aqui também para garantir segurança em outras chamadas
+        stmt = select(Order).where(Order.id == id, Order.store_id == current_user.store_id).options(
+             selectinload(Order.items).joinedload(OrderItem.product).options(
+                joinedload(Product.category).selectinload(ProductCategory.subcategories)
+            )
+        )
         result = await db.execute(stmt)
         return result.scalars().first()
 
@@ -203,23 +239,20 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         db.add(db_order)
         await db.commit()
         await db.refresh(db_order)
-        return await get_full_order(db, id=db_order.id)
+        # Retorno é feito pelo endpoint usando get_full_order
+        return db_order
     
-    # --- INÍCIO DAS NOVAS FUNÇÕES ---
     async def transfer_order(self, db: AsyncSession, *, source_order: Order, target_table_id: int, current_user: User) -> Order:
-        """Transfere uma comanda para uma nova mesa."""
         target_table = await db.get(Table, target_table_id)
         if not target_table or target_table.store_id != current_user.store_id:
             raise HTTPException(status_code=404, detail="Mesa de destino não encontrada.")
         if target_table.status != TableStatus.AVAILABLE:
             raise HTTPException(status_code=400, detail="Mesa de destino não está livre.")
         
-        # Libera a mesa antiga
         if source_order.table:
             source_order.table.status = TableStatus.AVAILABLE
             db.add(source_order.table)
             
-        # Ocupa a nova mesa e atualiza a comanda
         target_table.status = TableStatus.OCCUPIED
         source_order.table_id = target_table.id
         db.add(target_table)
@@ -230,30 +263,20 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         return source_order
 
     async def merge_orders(self, db: AsyncSession, *, target_order: Order, source_order_id: int, current_user: User) -> Order:
-        """Junta os itens de uma comanda de origem em uma comanda de destino."""
         source_order = await get_full_order(db, id=source_order_id)
         if not source_order or source_order.store_id != current_user.store_id:
             raise HTTPException(status_code=404, detail="Comanda de origem não encontrada.")
 
-        # Move os itens
         for item in source_order.items:
             item.order_id = target_order.id
             db.add(item)
             
-        # Cancela a comanda de origem
         await self.cancel_order(db, order=source_order, current_user=current_user)
         
         await db.commit()
         return await get_full_order(db, id=target_order.id)
-    async def get_kitchen_orders(self, db: AsyncSession, *, current_user: User) -> List[Order]:
-        """
-        Busca todos os pedidos ABERTOS da loja, carregando TODAS as dependências profundas
-        para evitar erros de validação (422) ou MissingGreenlet (500).
-        """
-        # Importações necessárias para as options (coloque no topo do arquivo se preferir)
-        from app.models.product import Product
-        from app.models.variation import ProductVariation
 
+    async def get_kitchen_orders(self, db: AsyncSession, *, current_user: User) -> List[Order]:
         stmt = (
             select(Order)
             .where(
@@ -261,16 +284,13 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
                 Order.status == OrderStatus.OPEN
             )
             .options(
-                # 1. Carrega a mesa
                 selectinload(Order.table),
-                # 2. Carrega o usuário (garçom/operador)
                 selectinload(Order.user),
-                # 3. Carrega os itens e TUDO sobre o produto
                 selectinload(Order.items).joinedload(OrderItem.product).options(
-                    joinedload(Product.category),
+                    # Carregamento profundo aqui também
+                    joinedload(Product.category).selectinload(ProductCategory.subcategories),
                     joinedload(Product.subcategory),
                     joinedload(Product.supplier),
-                    # Carrega variações E suas opções (ex: Tamanho -> P)
                     selectinload(Product.variations).selectinload(ProductVariation.options) 
                 )
             )
@@ -278,18 +298,12 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         )
         result = await db.execute(stmt)
         return result.scalars().all()
+
     async def update_order_item_status(self, db: AsyncSession, *, item_id: int, new_status: str, current_user: User) -> Optional[OrderItem]:
-        """
-        Atualiza o status de um item específico (ex: de 'pending' para 'ready').
-        """
-        # Busca o item garantindo que pertence à loja do usuário
         stmt = (
             select(OrderItem)
             .join(Order)
-            .where(
-                OrderItem.id == item_id,
-                Order.store_id == current_user.store_id
-            )
+            .where(OrderItem.id == item_id, Order.store_id == current_user.store_id)
         )
         result = await db.execute(stmt)
         item = result.scalars().first()
@@ -301,58 +315,9 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
             await db.refresh(item)
         
         return item
-    
-    async def update_item_quantity(
-        self, db: AsyncSession, *, order_id: int, item_id: int, quantity: int, current_user: User
-    ) -> Order:
-        """ Atualiza a quantidade de um item no pedido. """
-        # 1. Busca o item
-        stmt = select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
-        result = await db.execute(stmt)
-        item = result.scalars().first()
-        
-        if not item:
-            raise HTTPException(status_code=404, detail="Item não encontrado neste pedido.")
 
-        # 2. Calcula a diferença para o estoque
-        qty_diff = quantity - item.quantity
-        
-        # 3. Atualiza o item
-        item.quantity = quantity
-        db.add(item)
-        
-        # 4. Atualiza estoque (se necessário)
-        # Se qty_diff > 0, estamos tirando mais do estoque. Se < 0, devolvendo.
-        # Nota: O stock_service deve lidar com valores negativos corretamente (devolução)
-        # ou você deve chamar 'adjust_stock' ou 'deduct'. 
-        # Simplificação: Assumindo que o frontend valida estoque negativo na adição.
-        
-        await db.commit()
-        
-        # Retorna o pedido completo atualizado
-        return await get_full_order(db, id=order_id)
-
-    async def remove_item_from_order(
-        self, db: AsyncSession, *, order_id: int, item_id: int, current_user: User
-    ) -> Order:
-        """ Remove um item do pedido. """
-        stmt = select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
-        result = await db.execute(stmt)
-        item = result.scalars().first()
-        
-        if not item:
-            raise HTTPException(status_code=404, detail="Item não encontrado.")
-            
-        # Opcional: Devolver ao estoque aqui se o sistema reservar na adição
-        
-        await db.delete(item)
-        await db.commit()
-        
-        return await get_full_order(db, id=order_id)
-    
-
+    # --- NOVOS MÉTODOS PARA STAND-BY ---
     async def hold_order(self, db: AsyncSession, *, order: Order) -> Order:
-        """ Coloca a comanda em espera (Stand-by). """
         order.status = OrderStatus.ON_HOLD
         db.add(order)
         await db.commit()
@@ -360,13 +325,12 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         return order
 
     async def get_held_orders(self, db: AsyncSession, *, current_user: User) -> List[Order]:
-        """ Lista todas as comandas em espera da loja. """
         stmt = (
             select(Order)
             .where(
                 Order.store_id == current_user.store_id,
                 Order.status == OrderStatus.ON_HOLD,
-                Order.order_type == OrderType.TAKEOUT # Geralmente só PDV usa hold
+                Order.order_type == OrderType.TAKEOUT
             )
             .options(
                 selectinload(Order.items).selectinload(OrderItem.product),
@@ -378,16 +342,42 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         return result.scalars().all()
 
     async def resume_order(self, db: AsyncSession, *, order: Order) -> Order:
-        """ Retoma uma comanda (volta para OPEN). """
         order.status = OrderStatus.OPEN
         db.add(order)
         await db.commit()
         await db.refresh(order)
-        return await get_full_order(db=db, id=order.id)
-
-# Instância global
-order = CRUDOrder(Order)
-
-    # --- FIM DAS NOVAS FUNÇÕES ---
+        return await get_full_order(db, id=order.id)
+    
+    # --- MÉTODOS PARA ATUALIZAR/REMOVER ITENS DO POS ---
+    async def update_item_quantity(
+        self, db: AsyncSession, *, order_id: int, item_id: int, quantity: int, current_user: User
+    ) -> Order:
+        stmt = select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
+        result = await db.execute(stmt)
+        item = result.scalars().first()
         
+        if not item:
+            raise HTTPException(status_code=404, detail="Item não encontrado neste pedido.")
+
+        item.quantity = quantity
+        db.add(item)
+        await db.commit()
+        
+        return await get_full_order(db, id=order_id)
+
+    async def remove_item_from_order(
+        self, db: AsyncSession, *, order_id: int, item_id: int, current_user: User
+    ) -> Order:
+        stmt = select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
+        result = await db.execute(stmt)
+        item = result.scalars().first()
+        s
+        if not item:
+            raise HTTPException(status_code=404, detail="Item não encontrado.")
+            
+        await db.delete(item)
+        await db.commit()
+        
+        return await get_full_order(db, id=order_id)
+
 order = CRUDOrder(Order)

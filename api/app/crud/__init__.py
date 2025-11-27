@@ -19,7 +19,7 @@ from .crud_wall import wall # <--- ADICIONE ESTA LINHA
 # 2. Importa os módulos CRUD que são baseados em funções, usando um alias (apelido) para facilitar o acesso.
 from . import crud_additional as additional
 from . import crud_attribute as attribute
-from . import crud_category as category
+from .crud_category import category
 from . import crud_ingredient as ingredient
 from . import crud_recipe as recipe
 from . import crud_report as report

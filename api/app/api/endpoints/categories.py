@@ -7,28 +7,30 @@ from app.models.user import User as UserModel
 from app.schemas.category import ProductCategory, ProductCategoryCreate, ProductCategoryUpdate
 from app.api.dependencies import get_db, get_current_active_user, RoleChecker
 from app.schemas.enums import UserRole
+from app.api import dependencies
 
 router = APIRouter()
 manager_permissions = RoleChecker([UserRole.ADMIN, UserRole.MANAGER])
 
-@router.post("/", response_model=ProductCategory, status_code=status.HTTP_201_CREATED, dependencies=[Depends(manager_permissions)])
-async def create_category(
-    *,
-    db: AsyncSession = Depends(get_db),
-    category_in: ProductCategoryCreate,
-    current_user: UserModel = Depends(get_current_active_user)
-) -> Any:
-    """Cria uma nova categoria de produto (Grupo)."""
-    return await crud.category.create(db=db, obj_in=category_in, current_user=current_user)
-
 @router.get("/", response_model=List[ProductCategory])
 async def read_categories(
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: UserModel = Depends(get_current_active_user)
+    db: AsyncSession = Depends(dependencies.get_db),
+    skip: int = 0,
+    limit: int = 100,
+    current_user: UserModel = Depends(dependencies.get_current_active_user),
 ) -> Any:
-    """Lista todas as categorias da loja."""
-    return await crud.category.get_multi(db=db, current_user=current_user)
+    """ Lista as categorias da loja. """
+    return await crud.category.get_multi(db, skip=skip, limit=limit, current_user=current_user)
+
+@router.post("/", response_model=ProductCategory, status_code=status.HTTP_201_CREATED)
+async def create_category(
+    *,
+    db: AsyncSession = Depends(dependencies.get_db),
+    category_in: ProductCategoryCreate,
+    current_user: UserModel = Depends(dependencies.get_current_active_user),
+) -> Any:
+    """ Cria uma nova categoria. """
+    return await crud.category.create(db=db, obj_in=category_in, current_user=current_user)
 
 @router.put("/{category_id}", response_model=ProductCategory, dependencies=[Depends(manager_permissions)])
 async def update_category(
