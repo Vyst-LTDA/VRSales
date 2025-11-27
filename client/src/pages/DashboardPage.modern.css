@@ -1,70 +1,104 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+/* DashboardPage.modern.css */
 
-.dashboard-container {
+.dashboard-page {
   padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  font-family: 'Inter', sans-serif;
+  background-color: #f4f6f8; /* Fundo suave para a página inteira */
+  min-height: 100%;
 }
 
-.dashboard-header {
+/* Header */
+.dashboard-header-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  color: white;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
+.custom-segmented .ant-segmented-item-selected {
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-weight: 600;
+  color: #0052CC;
+}
+
+/* KPI Cards */
 .kpi-card-wrapper {
   height: 100%;
 }
 
 .kpi-card {
-  display: flex;
-  align-items: center;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 24px;
   height: 100%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0,0,0,0.02);
+  position: relative;
+  overflow: hidden;
 }
 
-.kpi-icon {
-  font-size: 28px;
-  color: white;
-  width: 50px;
-  height: 50px;
+.kpi-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.kpi-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.kpi-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
   margin-right: 16px;
 }
 
-.kpi-content .ant-typography {
-  margin: 0;
+.kpi-title {
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.kpi-content .ant-typography-secondary {
-  margin-bottom: 4px;
-  font-weight: 600;
+/* Conteúdo (Listas e Gráficos) */
+.dashboard-content-card {
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  height: 100%;
+  overflow: hidden;
 }
 
-/* Reestilizando componentes reutilizados para combinar com o novo design */
-.dashboard-container .ant-card {
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  border: none;
+.dashboard-content-card .ant-card-head {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 0 24px;
 }
 
-.dashboard-container .ant-card-head-title {
-  font-weight: 600;
-  color: #333;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.dashboard-content-card .ant-card-body {
+  padding: 24px;
 }
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .dashboard-header-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .header-actions {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+  }
+}
+

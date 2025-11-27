@@ -349,6 +349,41 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         await db.commit()
         
         return await get_full_order(db, id=order_id)
+    
+
+    async def hold_order(self, db: AsyncSession, *, order: Order) -> Order:
+        """ Coloca a comanda em espera (Stand-by). """
+        order.status = OrderStatus.ON_HOLD
+        db.add(order)
+        await db.commit()
+        await db.refresh(order)
+        return order
+
+    async def get_held_orders(self, db: AsyncSession, *, current_user: User) -> List[Order]:
+        """ Lista todas as comandas em espera da loja. """
+        stmt = (
+            select(Order)
+            .where(
+                Order.store_id == current_user.store_id,
+                Order.status == OrderStatus.ON_HOLD,
+                Order.order_type == OrderType.TAKEOUT # Geralmente só PDV usa hold
+            )
+            .options(
+                selectinload(Order.items).selectinload(OrderItem.product),
+                selectinload(Order.customer)
+            )
+            .order_by(Order.created_at.desc())
+        )
+        result = await db.execute(stmt)
+        return result.scalars().all()
+
+    async def resume_order(self, db: AsyncSession, *, order: Order) -> Order:
+        """ Retoma uma comanda (volta para OPEN). """
+        order.status = OrderStatus.OPEN
+        db.add(order)
+        await db.commit()
+        await db.refresh(order)
+        return await get_full_order(db=db, id=order.id)
 
 # Instância global
 order = CRUDOrder(Order)
