@@ -1,26 +1,19 @@
+# api/app/schemas/enums.py
 import enum
 from enum import Enum
 
-# O (str, enum.Enum) é uma prática recomendada para que o FastAPI/Pydantic
-# trate os membros do enum como strings, o que é ideal para APIs JSON.
-
 class UnitOfMeasure(str, enum.Enum):
-    """ Unidades de medida para os insumos. """
     KILOGRAM = "kg"
     GRAM = "g"
     LITER = "l"
     MILLILITER = "ml"
     UNIT = "un"
 
-# --- INÍCIO DA NOVA ADIÇÃO ---
 class TableShape(str, enum.Enum):
-    """ Formatos de mesa disponíveis. """
     RECTANGLE = "rectangle"
     ROUND = "round"
-# --- FIM DA NOVA ADIÇÃO ---
 
 class TableStatus(str, enum.Enum):
-    """ Status de uma mesa no restaurante. """
     AVAILABLE = "available"
     OCCUPIED = "occupied"
     RESERVED = "reserved"
@@ -30,6 +23,9 @@ class OrderStatus(str, enum.Enum):
     CLOSED = "closed"
     PAID = "paid"
     CANCELLED = "cancelled"
+    # --- NOVO STATUS ---
+    ON_HOLD = "on_hold" 
+    # -------------------
 
 class OrderType(str, Enum):
     DINE_IN = "DINE_IN"

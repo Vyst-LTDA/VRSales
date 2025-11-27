@@ -3,14 +3,15 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Layout, Input, Table, Avatar, Typography, Button, Space,
   Divider, message, Modal, Image, Spin, Empty, AutoComplete,
-  Select, Badge, Form, Tag
+  Select, Badge, Form, Tag, List, Card, Tooltip
 } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingOutlined, PlusOutlined, MinusOutlined, DeleteOutlined,
   CloseCircleOutlined, UserOutlined, WarningOutlined, StarFilled,
   MailOutlined, PhoneOutlined, ScanOutlined, CheckCircleFilled,
-  SyncOutlined, SaveOutlined, ThunderboltFilled
+  SyncOutlined, SaveOutlined, ThunderboltFilled, PauseCircleOutlined,
+  PlayCircleOutlined, QuestionCircleOutlined
 } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import PaymentModal from '../components/PaymentModal';
@@ -19,7 +20,6 @@ import { useDebounce } from '../hooks/useDebounce';
 
 const { Title, Text } = Typography;
 
-// --- ESTILOS (Mantidos) ---
 const POSStyles = () => (
   <style>{`
     .pos-container { height: calc(100vh - 84px); display: flex; gap: 24px; overflow: hidden; font-family: 'Inter', sans-serif; }
@@ -38,23 +38,12 @@ const POSStyles = () => (
     .totals-container .ant-typography { color: rgba(255,255,255,0.7); }
     .totals-container .amount-display { font-size: 48px; font-weight: 800; color: #ffffff; line-height: 1; margin: 8px 0 24px 0; letter-spacing: -1px; }
     .action-btn-lg { height: 56px; font-size: 16px; font-weight: 700; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .key-badge { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px; font-size: 12px; }
+    .key-badge { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px; font-size: 12px; margin-right: 6px; }
     .product-option-item { padding: 8px 0; display: flex; align-items: center; gap: 12px; }
     .product-option-item img { width: 40px; height: 40px; border-radius: 6px; object-fit: cover; }
-    
-    /* Estilo dos Botões Multiplicadores */
-    .multiplier-btn {
-        border-color: #eef2f5;
-        color: #5e6c84;
-        font-weight: 600;
-        background: #f9fafb;
-        transition: all 0.2s;
-    }
-    .multiplier-btn:hover {
-        border-color: #0052CC;
-        color: #0052CC;
-        background: #ebf3ff;
-    }
+    .multiplier-btn { border-color: #eef2f5; color: #5e6c84; font-weight: 600; background: #f9fafb; }
+    .multiplier-btn:hover { border-color: #0052CC; color: #0052CC; background: #ebf3ff; }
+    .shortcut-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
   `}</style>
 );
 
@@ -91,8 +80,10 @@ const POSPage = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   
-  // Modal de Cancelamento
   const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
+  const [isHelpModalVisible, setIsHelpModalVisible] = useState(false); // NOVO
+  const [isHeldOrdersModalVisible, setIsHeldOrdersModalVisible] = useState(false); // NOVO
+  const [heldOrders, setHeldOrders] = useState([]); // NOVO
 
   const [searchValue, setSearchValue] = useState('');
   const [autocompleteOptions, setAutocompleteOptions] = useState([]);
@@ -120,19 +111,11 @@ const POSPage = () => {
     }));
   };
 
-  // --- SONS ---
-  const playSuccessSound = () => {
-    const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3"); 
-    audio.volume = 0.5;
-    audio.play().catch(e => console.log("Audio play failed", e));
-  };
+  // SONS
+  const playSuccessSound = () => { const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3"); audio.volume = 0.5; audio.play().catch(()=>{}); };
+  const playErrorSound = () => { const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets/soundboard/explode.mp3"); audio.volume = 0.3; audio.play().catch(()=>{}); };
 
-  const playErrorSound = () => {
-    const audio = new Audio("https://codeskulptor-demos.commondatastorage.googleapis.com/assets/soundboard/explode.mp3");
-    audio.volume = 0.3;
-    audio.play().catch(e => console.log("Audio play failed", e));
-  };
-
+  // INICIALIZAÇÃO
   useEffect(() => {
     const initializePOS = async () => {
       try {
@@ -160,15 +143,12 @@ const POSPage = () => {
     initializePOS();
   }, [navigate]);
 
+  // BUSCA PRODUTOS
   const fetchProducts = useCallback(async (term = '') => {
-    // Se o termo começar com "N*", ignora a busca até ter algo depois do asterisco
     if (/^\d+\*$/.test(term)) return;
-
     setSearchLoading(true);
     try {
-      // Remove o multiplicador da busca se existir (ex: "2*coca" -> busca só "coca")
       const cleanTerm = term.replace(/^\d+[\*x]/i, '');
-      
       const res = await ApiService.lookupProduct(cleanTerm);
       const options = (res.data || []).map(p => ({
         value: p.name, key: p.id, productData: p,
@@ -195,122 +175,87 @@ const POSPage = () => {
     else if (!debouncedSearchValue) setAutocompleteOptions([]);
   }, [debouncedSearchValue, fetchProducts]);
 
-  // --- FUNÇÃO PARA BOTÕES DE MULTIPLICADOR ---
-  const handleQuickMultiplier = (n) => {
-    setSearchValue(`${n}*`);
-    searchInputRef.current?.focus();
-  };
+  const handleQuickMultiplier = (n) => { setSearchValue(`${n}*`); searchInputRef.current?.focus(); };
 
+  // ADICIONAR AO CARRINHO
   const addProductToCart = async (product, quantityOverride = 1) => {
     const existing = cartItems.find(i => i.id === product.id);
     if (product.stock <= (existing ? existing.quantity : 0) + quantityOverride - 1) { 
-       // Warning silencioso ou visual poderia ser aqui
+       message.warning({ content: `Estoque de "${product.name}" zerado/negativo.`, icon: <WarningOutlined style={{color: '#faad14'}}/> }, 3);
     }
 
     setIsSyncing(true);
     try {
-      let response;
-      
-      if (!activeOrderId) {
-        const newOrderData = {
-          order_type: 'TAKEOUT',
-          customer_id: selectedCustomer?.id || null,
-          items: [{ product_id: product.id, quantity: quantityOverride }]
-        };
-        response = await ApiService.createOrder(newOrderData);
-        setActiveOrderId(response.data.id);
-      } else {
-        response = await ApiService.addItemToOrder(activeOrderId, { 
-          product_id: product.id, 
-          quantity: quantityOverride 
-        });
-      }
+        let response;
+        if (!activeOrderId) {
+            const newOrderData = {
+                order_type: 'TAKEOUT', 
+                customer_id: selectedCustomer?.id || null,
+                items: [{ product_id: product.id, quantity: quantityOverride }]
+            };
+            response = await ApiService.createOrder(newOrderData);
+            setActiveOrderId(response.data.id);
+        } else {
+            response = await ApiService.addItemToOrder(activeOrderId, { product_id: product.id, quantity: quantityOverride });
+        }
 
-      if (response.data && response.data.items) {
-        const freshItems = mapOrderItemsToTable(response.data.items);
-        setCartItems(freshItems);
-        const addedItem = freshItems.find(i => i.id === product.id);
-        if (addedItem) setLastAddedItem(addedItem);
-        message.success(`${product.name} adicionado!`);
-      }
-
-      setSearchValue('');
-      setAutocompleteOptions([]);
-      setTimeout(() => searchInputRef.current?.focus(), 100);
-
-    } catch (error) {
-      console.error(error);
-      message.error("Erro ao adicionar item.");
-    } finally {
-      setIsSyncing(false);
-    }
+        if (response.data && response.data.items) {
+            const freshItems = mapOrderItemsToTable(response.data.items);
+            setCartItems(freshItems);
+            const addedItem = freshItems.find(i => i.id === product.id);
+            if (addedItem) setLastAddedItem(addedItem);
+            message.success(`${product.name} adicionado!`);
+        }
+        setSearchValue('');
+        setAutocompleteOptions([]);
+        setTimeout(() => searchInputRef.current?.focus(), 100);
+    } catch (error) { console.error(error); message.error("Erro ao adicionar item."); } 
+    finally { setIsSyncing(false); }
   };
 
   const updateQty = async (product, delta) => {
     if (!activeOrderId || !product.orderItemId) return;
     setIsSyncing(true);
-    
     try {
-      let response;
-      const newQty = product.quantity + delta;
-
-      if (newQty <= 0) {
-        response = await ApiService.removeOrderItem(activeOrderId, product.orderItemId);
-        message.info('Item removido.');
-      } else {
-        response = await ApiService.updateOrderItem(activeOrderId, product.orderItemId, newQty);
-      }
-
-      if (response.data && response.data.items) {
-        setCartItems(mapOrderItemsToTable(response.data.items));
-      }
-
-    } catch (error) {
-      message.error("Erro ao atualizar quantidade.");
-    } finally {
-      setIsSyncing(false);
-    }
+        let response;
+        const newQty = product.quantity + delta;
+        if (newQty <= 0) {
+            response = await ApiService.removeOrderItem(activeOrderId, product.orderItemId);
+            message.info('Item removido.');
+        } else {
+            response = await ApiService.updateOrderItem(activeOrderId, product.orderItemId, newQty);
+        }
+        if (response.data && response.data.items) setCartItems(mapOrderItemsToTable(response.data.items));
+    } catch (error) { message.error("Erro ao atualizar quantidade."); }
+    finally { setIsSyncing(false); }
   };
 
   const handleExactSearch = async () => {
     if (!searchValue) return;
     setSearchLoading(true);
-
-    // Lógica do Multiplicador (Ex: "10*123456")
     let qtyMultiplier = 1;
     let termToSearch = searchValue;
-
     const match = searchValue.match(/^(\d+)[x\*](.+)$/i);
-    if (match) {
-        qtyMultiplier = parseInt(match[1], 10);
-        termToSearch = match[2].trim();
-    }
+    if (match) { qtyMultiplier = parseInt(match[1], 10); termToSearch = match[2].trim(); }
 
     try {
       const res = await ApiService.lookupProduct(termToSearch);
-      
       if (res.data.length > 0) {
         const exactBarcodeMatch = res.data.find(p => p.barcode === termToSearch);
         const exactNameMatch = res.data.find(p => p.name.toLowerCase() === termToSearch.toLowerCase());
         const productToAdd = exactBarcodeMatch || exactNameMatch || res.data[0];
-
-        await addProductToCart(productToAdd, qtyMultiplier); 
+        await addProductToCart(productToAdd, qtyMultiplier);
         playSuccessSound();
       } else {
         playErrorSound();
         message.warning('Produto não encontrado');
         setSearchValue('');
       }
-    } catch { 
-      playErrorSound();
-      message.error('Erro na busca'); 
-    } finally { 
-      setSearchLoading(false); 
-      setTimeout(() => searchInputRef.current?.focus(), 100);
-    }
+    } catch { playErrorSound(); message.error('Erro na busca'); }
+    finally { setSearchLoading(false); setTimeout(() => searchInputRef.current?.focus(), 100); }
   };
 
-  // ... (Clientes - Sem alteração)
+  // CLIENTES
   const fetchCustomers = useCallback(async (term = '') => {
     setCustomerLoading(true);
     try {
@@ -336,28 +281,19 @@ const POSPage = () => {
     } catch (err) { message.error('Erro ao criar cliente'); }
   };
 
-  const handleRequestCancel = useCallback(() => {
-    if (activeOrderId) {
-      setIsCancelModalVisible(true);
-    }
-  }, [activeOrderId]);
+  // --- AÇÕES DE VENDA ---
+  const handleRequestCancel = useCallback(() => { if (activeOrderId) setIsCancelModalVisible(true); }, [activeOrderId]);
 
   const confirmCancelSale = async () => {
     setIsSyncing(true);
     try {
         await ApiService.cancelOrder(activeOrderId);
-        setCartItems([]);
-        setLastAddedItem(null);
-        setSelectedCustomer(null);
-        setActiveOrderId(null);
+        setCartItems([]); setLastAddedItem(null); setSelectedCustomer(null); setActiveOrderId(null);
         setIsCancelModalVisible(false);
         message.success('Venda cancelada.');
         searchInputRef.current?.focus();
-    } catch (err) { 
-        message.error("Erro ao cancelar venda."); 
-    } finally { 
-        setIsSyncing(false); 
-    }
+    } catch (err) { message.error("Erro ao cancelar venda."); } 
+    finally { setIsSyncing(false); }
   };
 
   const handleOpenPaymentModal = useCallback(() => {
@@ -366,19 +302,53 @@ const POSPage = () => {
   }, [cartItems]);
 
   const handleSaleSuccess = () => {
-    setIsPaymentModalOpen(false);
-    setCartItems([]);
-    setLastAddedItem(null);
-    setSelectedCustomer(null);
-    setActiveOrderId(null);
-    message.success('Venda realizada!');
-    searchInputRef.current?.focus();
+    setIsPaymentModalOpen(false); setCartItems([]); setLastAddedItem(null); setSelectedCustomer(null); setActiveOrderId(null);
+    message.success('Venda realizada!'); searchInputRef.current?.focus();
   };
 
+  // --- NOVA FUNCIONALIDADE: SEGURAR VENDA (F4) ---
+  const handleHoldOrder = async () => {
+    if (!activeOrderId) { message.warning('Nenhuma venda para segurar.'); return; }
+    setIsSyncing(true);
+    try {
+        await ApiService.holdOrder(activeOrderId);
+        setCartItems([]); setLastAddedItem(null); setSelectedCustomer(null); setActiveOrderId(null);
+        message.success('Venda colocada em espera!');
+        searchInputRef.current?.focus();
+    } catch (error) { message.error('Erro ao segurar venda.'); }
+    finally { setIsSyncing(false); }
+  };
+
+  // --- NOVA FUNCIONALIDADE: RECUPERAR VENDA ---
+  const fetchHeldOrders = async () => {
+      try {
+          const res = await ApiService.getHeldOrders();
+          setHeldOrders(res.data);
+          setIsHeldOrdersModalVisible(true);
+      } catch (error) { message.error('Erro ao buscar vendas em espera.'); }
+  };
+
+  const handleResumeOrder = async (orderId) => {
+      if (activeOrderId) { message.warning('Finalize ou segure a venda atual antes de retomar outra.'); return; }
+      try {
+          const res = await ApiService.resumeOrder(orderId);
+          setActiveOrderId(res.data.id);
+          setCartItems(mapOrderItemsToTable(res.data.items || []));
+          if (res.data.customer) setSelectedCustomer(res.data.customer);
+          setIsHeldOrdersModalVisible(false);
+          message.success('Venda retomada!');
+          searchInputRef.current?.focus();
+      } catch (error) { message.error('Erro ao retomar venda.'); }
+  };
+
+  // --- ATALHOS GLOBAIS ---
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'F6') { e.preventDefault(); handleOpenPaymentModal(); }
       if (e.key === 'F3') { e.preventDefault(); if (activeOrderId) handleRequestCancel(); }
+      if (e.key === 'F4') { e.preventDefault(); handleHoldOrder(); } // F4 Segura
+      if (e.key === 'F1') { e.preventDefault(); setIsHelpModalVisible(true); } // F1 Ajuda
+      if (e.key === 'F2') { e.preventDefault(); searchInputRef.current?.focus(); } // F2 Foca
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -412,25 +382,17 @@ const POSPage = () => {
       <POSStyles />
       <div className="pos-container">
         <div className="pos-left-panel">
-          
-          {/* --- BOTÕES DE MULTIPLICADOR RÁPIDO --- */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 0 }}>
              {[2, 3, 4, 5, 6, 10, 12].map(n => (
-                 <Button 
-                    key={n} 
-                    size="small" 
-                    onClick={() => handleQuickMultiplier(n)}
-                    className="multiplier-btn"
-                    icon={<ThunderboltFilled style={{fontSize: 10}} />}
-                 >
-                    +{n}
-                 </Button>
+                 <Button key={n} size="small" onClick={() => handleQuickMultiplier(n)} className="multiplier-btn" icon={<ThunderboltFilled style={{fontSize: 10}} />}>+{n}</Button>
              ))}
+             {/* BOTÃO DE AJUDA (F1) */}
+             <Button size="small" icon={<QuestionCircleOutlined />} onClick={() => setIsHelpModalVisible(true)} style={{marginLeft: 'auto'}}>Ajuda (F1)</Button>
           </div>
 
           <div className="search-wrapper">
             <AutoComplete options={autocompleteOptions} style={{ width: '100%' }} onSelect={(_, opt) => addProductToCart(opt.productData)} onSearch={setSearchValue} value={searchValue} backfill>
-              <Input ref={searchInputRef} size="large" placeholder="Escaneie o código ou digite..." prefix={<ScanOutlined style={{ fontSize: 20, color: '#0052CC', marginRight: 8 }} />} onPressEnter={handleExactSearch} suffix={isSyncing ? <SyncOutlined spin style={{color:'#0052CC'}} /> : (searchLoading ? <Spin size="small"/> : <div style={{ fontSize: 12, color: '#999', border: '1px solid #ddd', padding: '0 6px', borderRadius: 4 }}>ENTER</div>)} />
+              <Input ref={searchInputRef} size="large" placeholder="Escaneie o código (F2 para focar)..." prefix={<ScanOutlined style={{ fontSize: 20, color: '#0052CC', marginRight: 8 }} />} onPressEnter={handleExactSearch} suffix={isSyncing ? <SyncOutlined spin style={{color:'#0052CC'}} /> : (searchLoading ? <Spin size="small"/> : <div style={{ fontSize: 12, color: '#999', border: '1px solid #ddd', padding: '0 6px', borderRadius: 4 }}>ENTER</div>)} />
             </AutoComplete>
           </div>
           <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -438,9 +400,15 @@ const POSPage = () => {
           </div>
         </div>
         <div className="pos-right-panel">
-          {activeOrderId && <div style={{ background: '#E3FCEF', padding: '8px 12px', borderRadius: 8, color: '#006644', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><SaveOutlined /> Venda #{activeOrderId} salva no sistema.</div>}
+          {activeOrderId && <div style={{ background: '#E3FCEF', padding: '8px 12px', borderRadius: 8, color: '#006644', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}><SaveOutlined /> Venda #{activeOrderId} salva.</div>}
           <div className="info-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}><Text type="secondary" strong style={{ fontSize: 12, textTransform: 'uppercase' }}>Cliente</Text>{!selectedCustomer && (<Button type="link" size="small" style={{ padding: 0 }} onClick={() => setIsCustomerModalVisible(true)}>+ Novo</Button>)}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text type="secondary" strong style={{ fontSize: 12, textTransform: 'uppercase' }}>Cliente</Text>
+                <div style={{display:'flex', gap:8}}>
+                    <Button type="link" size="small" style={{ padding: 0 }} onClick={fetchHeldOrders}>Recuperar</Button>
+                    {!selectedCustomer && (<Button type="link" size="small" style={{ padding: 0 }} onClick={() => setIsCustomerModalVisible(true)}>+ Novo</Button>)}
+                </div>
+            </div>
             {selectedCustomer ? (<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F4F5F7', padding: 12, borderRadius: 8 }}><Space><Avatar style={{ backgroundColor: '#0052CC' }}>{selectedCustomer.full_name[0]}</Avatar><div><Text strong display="block">{selectedCustomer.full_name}</Text>{selectedCustomer.loyalty_points > 0 && (<div style={{ display: 'flex', alignItems: 'center', fontSize: 12, color: '#faad14' }}><StarFilled style={{ marginRight: 4 }} /> {selectedCustomer.loyalty_points} pts</div>)}</div></Space><Button type="text" icon={<CloseCircleOutlined />} onClick={() => setSelectedCustomer(null)} /></div>) : (<Select showSearch placeholder="Selecionar Cliente (Opcional)" style={{ width: '100%' }} size="large" onSearch={setCustomerSearchValue} onFocus={() => fetchCustomers('')} filterOption={false} options={customerOptions} onChange={(_, opt) => { setSelectedCustomer(opt.customerData); setCustomerOptions([]); }} notFoundContent={customerLoading ? <Spin size="small" /> : null} />)}
           </div>
           <div className="info-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: 180 }}>
@@ -451,24 +419,45 @@ const POSPage = () => {
             <Divider style={{ borderColor: 'rgba(255,255,255,0.1)', margin: '12px 0' }} />
             <Text>TOTAL A PAGAR</Text><div className="amount-display">R$ {subtotal.toFixed(2)}</div>
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
-              <Button type="primary" className="action-btn-lg" style={{ background: '#36B37E', borderColor: '#36B37E' }} block disabled={!activeOrderId && cartItems.length === 0} onClick={handleOpenPaymentModal}><span className="key-badge">F6</span> FINALIZAR VENDA</Button>
-              <Button danger className="action-btn-lg" block ghost disabled={!activeOrderId} onClick={handleRequestCancel}><span className="key-badge" style={{ background: 'rgba(255,77,79,0.1)', color: '#ff4d4f' }}>F3</span> CANCELAR</Button>
+              <Button type="primary" className="action-btn-lg" style={{ background: '#36B37E', borderColor: '#36B37E' }} block disabled={!activeOrderId && cartItems.length === 0} onClick={handleOpenPaymentModal}><span className="key-badge">F6</span> FINALIZAR</Button>
+              <div style={{ display: 'flex', gap: 12 }}>
+                  <Button className="action-btn-lg" style={{ flex: 1 }} onClick={handleHoldOrder} disabled={!activeOrderId}><span className="key-badge" style={{color:'#ccb8b8ff', background:'rgba(187, 165, 165, 0.1)'}}>F4</span> ESPERA</Button>
+                  <Button danger className="action-btn-lg" style={{ flex: 1 }} ghost disabled={!activeOrderId} onClick={handleRequestCancel}><span className="key-badge" style={{ background: 'rgba(255,77,79,0.1)', color: '#ff4d4f' }}>F3</span> CANCELAR</Button>
+              </div>
             </Space>
           </div>
         </div>
       </div>
       <PaymentModal open={isPaymentModalOpen} onCancel={() => setIsPaymentModalOpen(false)} onOk={handleSaleSuccess} cartItems={cartItems.map(i => ({ product_id: i.id, quantity: i.quantity, price_at_sale: i.price }))} totalAmount={subtotal} customerId={selectedCustomer?.id} orderId={activeOrderId} />
       <Modal title="Novo Cliente" open={isCustomerModalVisible} onCancel={() => setIsCustomerModalVisible(false)} footer={null} destroyOnClose><CustomerForm form={customerForm} onFinish={handleCreateCustomer} onCancel={() => setIsCustomerModalVisible(false)} /></Modal>
-      <Modal
-        title={<span style={{color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 8}}><WarningOutlined /> Cancelar Venda?</span>}
-        open={isCancelModalVisible}
-        onOk={confirmCancelSale}
-        onCancel={() => setIsCancelModalVisible(false)}
-        okText="Sim, Cancelar"
-        cancelText="Voltar"
-        okButtonProps={{ danger: true, loading: isSyncing }}
-      >
-        <p>Tem certeza que deseja cancelar a venda atual? Todos os itens serão removidos e a comanda será encerrada.</p>
+      <Modal title={<span style={{color: '#ff4d4f', display: 'flex', alignItems: 'center', gap: 8}}><WarningOutlined /> Cancelar Venda?</span>} open={isCancelModalVisible} onOk={confirmCancelSale} onCancel={() => setIsCancelModalVisible(false)} okText="Sim, Cancelar" cancelText="Voltar" okButtonProps={{ danger: true, loading: isSyncing }}><p>Tem certeza que deseja cancelar a venda atual? Todos os itens serão removidos.</p></Modal>
+      
+      {/* MODAL DE AJUDA (F1) */}
+      <Modal title="Atalhos do Sistema" open={isHelpModalVisible} onCancel={() => setIsHelpModalVisible(false)} footer={null}>
+          <div className="shortcut-row"><Text strong>F1</Text><Text>Ajuda / Atalhos</Text></div>
+          <div className="shortcut-row"><Text strong>F2</Text><Text>Focar na busca de produtos</Text></div>
+          <div className="shortcut-row"><Text strong>F3</Text><Text>Cancelar venda atual</Text></div>
+          <div className="shortcut-row"><Text strong>F4</Text><Text>Colocar venda em espera</Text></div>
+          <div className="shortcut-row"><Text strong>F6</Text><Text>Finalizar venda / Confirmar pgto</Text></div>
+          <div className="shortcut-row"><Text strong>N*Código</Text><Text>Multiplica quantidade (Ex: 10*789...)</Text></div>
+      </Modal>
+
+      {/* MODAL DE RECUPERAR VENDA */}
+      <Modal title="Vendas em Espera" open={isHeldOrdersModalVisible} onCancel={() => setIsHeldOrdersModalVisible(false)} footer={null}>
+          <List
+            itemLayout="horizontal"
+            dataSource={heldOrders}
+            renderItem={(item) => (
+              <List.Item actions={[<Button type="primary" onClick={() => handleResumeOrder(item.id)} icon={<PlayCircleOutlined />}>Retomar</Button>]}>
+                <List.Item.Meta
+                  avatar={<Avatar icon={<PauseCircleOutlined />} style={{ backgroundColor: '#faad14' }} />}
+                  title={<Text strong>Venda #{item.id}</Text>}
+                  description={<div>{item.items?.length} itens • {item.customer ? item.customer.full_name : 'Consumidor Final'} • {new Date(item.created_at).toLocaleTimeString()}</div>}
+                />
+              </List.Item>
+            )}
+            locale={{ emptyText: "Nenhuma venda em espera." }}
+          />
       </Modal>
     </>
   );

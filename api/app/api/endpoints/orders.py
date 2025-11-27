@@ -215,3 +215,35 @@ async def update_order_item_status(
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item não encontrado.")
     return item
+
+@router.get("/pos/held", response_model=List[OrderSchema])
+async def get_held_orders(
+    db: AsyncSession = Depends(dependencies.get_db),
+    current_user: UserModel = Depends(dependencies.get_current_active_user)
+):
+    """ Lista vendas em espera. """
+    return await crud_order.get_held_orders(db=db, current_user=current_user)
+
+@router.patch("/{order_id}/hold", response_model=OrderSchema)
+async def hold_order(
+    order_id: int,
+    db: AsyncSession = Depends(dependencies.get_db),
+    current_user: UserModel = Depends(dependencies.get_current_active_user),
+):
+    """ Coloca uma venda em espera. """
+    order = await crud_order.get_for_user(db=db, id=order_id, current_user=current_user)
+    if not order:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+    return await crud_order.hold_order(db=db, order=order)
+
+@router.patch("/{order_id}/resume", response_model=OrderSchema)
+async def resume_order(
+    order_id: int,
+    db: AsyncSession = Depends(dependencies.get_db),
+    current_user: UserModel = Depends(dependencies.get_current_active_user),
+):
+    """ Retoma uma venda em espera. """
+    order = await get_full_order(db=db, id=order_id)
+    if not order or order.store_id != current_user.store_id:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+    return await crud_order.resume_order(db=db, order=order)

@@ -103,7 +103,9 @@ const ApiService = {
   // Adicione a função que faltava para buscar histórico do cliente
   getCustomerSalesHistory: (customerId) => ApiService.get(`/customers/${customerId}/sales`),
 
-
+  getHeldOrders: () => ApiService.get('/orders/pos/held'),
+  holdOrder: (orderId) => ApiService.patch(`/orders/${orderId}/hold`),
+  resumeOrder: (orderId) => ApiService.patch(`/orders/${orderId}/resume`),
   // Outros...
   getStores: () => ApiService.get('/stores'),
   getGlobalDashboardSummary: () => ApiService.get('/super-admin/dashboard'),

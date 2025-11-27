@@ -7,15 +7,17 @@ from typing import List, Optional
 from fastapi import HTTPException, status
 from decimal import Decimal, ROUND_HALF_UP
 from loguru import logger
-
+from datetime import datetime
 from app.crud.base import CRUDBase
 from app.models.sale import Sale, SaleItem as SaleItemModel
 from app.models.payment import Payment
 from app.models.product import Product
-from app.schemas.sale import SaleCreate, SaleUpdate
 from app.models.user import User
-
-from app.crud.crud_order import get_full_order
+# --- IMPORTAÇÕES NOVAS ---
+from app.models.order import Order # Para fechar o pedido
+from app.schemas.enums import OrderStatus # Para o status CLOSED
+# -------------------------
+from app.schemas.sale import SaleCreate, SaleUpdate
 
 from app.services.crm_service import crm_service
 from app.services.stock_service import stock_service
@@ -23,9 +25,6 @@ from app.services.cash_register_service import cash_register_service
 
 
 async def get_full_sale(db: AsyncSession, *, id: int) -> Optional[Sale]:
-    """
-    Função auxiliar para carregar uma Venda (Sale) com todos os seus relacionamentos.
-    """
     stmt = select(Sale).where(Sale.id == id).options(
         selectinload(Sale.items).options(
             joinedload(SaleItemModel.product)
@@ -39,15 +38,11 @@ async def get_full_sale(db: AsyncSession, *, id: int) -> Optional[Sale]:
 
 
 def _run_sync_post_sale_services(db_session: Session, *, sale: Sale):
-    """
-    Executa os serviços síncronos de forma segura e atômica.
-    """
+    """ Executa os serviços síncronos de forma segura. """
     sync_sale = db_session.merge(sale)
-    
     cash_register_service.add_sale_transaction(db_session, sale=sync_sale)
     crm_service.update_customer_stats_from_sale(db_session, sale=sync_sale)
     stock_service.deduct_stock_from_sale(db_session, sale=sync_sale)
-    
     db_session.commit()
 
 
@@ -56,9 +51,6 @@ class CRUDSale(CRUDBase[Sale, SaleCreate, SaleUpdate]):
     async def get_multi_detailed(
         self, db: AsyncSession, *, skip: int = 0, limit: int = 100, current_user: User
     ) -> List[Sale]:
-        """
-        Busca uma lista de vendas com detalhes do cliente e usuário para a loja atual.
-        """
         stmt = (
             select(self.model)
             .where(self.model.store_id == current_user.store_id)
@@ -66,11 +58,7 @@ class CRUDSale(CRUDBase[Sale, SaleCreate, SaleUpdate]):
                 selectinload(self.model.items).options(selectinload(SaleItemModel.product)),
                 selectinload(self.model.customer),
                 selectinload(self.model.user),
-                # --- CORREÇÃO PRINCIPAL AQUI ---
-                # Adiciona o carregamento antecipado (eager loading) dos pagamentos.
-                # Isso evita o erro de "MissingGreenlet" ao carregar a relação de forma preguiçosa (lazy loading).
                 selectinload(self.model.payments)
-                # --- FIM DA CORREÇÃO ---
             )
             .order_by(self.model.created_at.desc())
             .offset(skip)
@@ -83,16 +71,21 @@ class CRUDSale(CRUDBase[Sale, SaleCreate, SaleUpdate]):
         sale_data = obj_in.model_dump()
         items_data = sale_data.pop("items", [])
         payments_data = sale_data.pop("payments", [])
+        
+        # --- LÓGICA DE FECHAMENTO DE PEDIDO ---
+        order_id = sale_data.pop("order_id", None) # Extrai o ID do pedido
+        # --------------------------------------
 
         if not items_data or not payments_data:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A venda deve conter pelo menos um item e um método de pagamento.")
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A venda deve conter itens e pagamento.")
 
         total_amount = sum(Decimal(str(item['price_at_sale'])) * Decimal(item['quantity']) for item in items_data)
         total_amount = float(total_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
         total_paid = sum(p['amount'] for p in payments_data)
-        if total_paid < total_amount:
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="O valor pago é menor que o total da venda.")
+        # Pequena margem de erro para floats
+        if total_paid < (total_amount - 0.05): 
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valor pago insuficiente.")
 
         primary_payment_method = payments_data[0]['payment_method'] if payments_data else "other"
 
@@ -107,14 +100,29 @@ class CRUDSale(CRUDBase[Sale, SaleCreate, SaleUpdate]):
         )
         
         db.add(db_sale)
+        
+        # --- FECHAR A COMANDA AUTOMATICAMENTE ---
+        if order_id:
+            stmt = select(Order).where(Order.id == order_id)
+            result = await db.execute(stmt)
+            order_obj = result.scalars().first()
+            
+            if order_obj:
+                # Se a comanda pertence à mesma loja, fechamos ela
+                if order_obj.store_id == current_user.store_id:
+                    order_obj.status = OrderStatus.CLOSED
+                    order_obj.closed_at = datetime.utcnow() # Importante importar datetime se não tiver
+                    db.add(order_obj)
+                    logger.info(f"Comanda #{order_id} fechada automaticamente pela Venda.")
+        # ----------------------------------------
+
         await db.commit()
         await db.refresh(db_sale)
 
+        # Serviços Pós-Venda (Estoque, Caixa, CRM)
         await db.run_sync(_run_sync_post_sale_services, sale=db_sale)
         
-        refreshed_sale = await get_full_sale(db, id=db_sale.id)
-        
-        return refreshed_sale
+        return await get_full_sale(db, id=db_sale.id)
 
     async def get_sales_by_customer(self, db: AsyncSession, *, customer_id: int, current_user: User) -> List[Sale]:
         stmt = (
