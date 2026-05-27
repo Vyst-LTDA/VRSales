@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Layout, Input, Table, Avatar, Typography, Button, Space,
   Divider, message, Modal, Image, Spin, Empty, AutoComplete,
-  Select, Badge, Form, Tag, List, Card, Tooltip
+  Select, Badge, Form, Tag, List, Card, Tooltip, InputNumber, Alert, Statistic, Row, Col
 } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -11,7 +11,7 @@ import {
   CloseCircleOutlined, UserOutlined, WarningOutlined, StarFilled,
   MailOutlined, PhoneOutlined, ScanOutlined, CheckCircleFilled,
   SyncOutlined, SaveOutlined, ThunderboltFilled, PauseCircleOutlined,
-  PlayCircleOutlined, QuestionCircleOutlined
+  PlayCircleOutlined, QuestionCircleOutlined, LockOutlined
 } from '@ant-design/icons';
 import ApiService from '../api/ApiService';
 import PaymentModal from '../components/PaymentModal';
@@ -25,24 +25,30 @@ const POSStyles = () => (
     .pos-wrapper {
       padding: 16px;
       background-color: #f4f5f7;
-      min-height: calc(100vh - 64px);
+      height: calc(100vh - 64px); 
+      box-sizing: border-box;
+      overflow: hidden; 
+      width: 100%;
     }
     .pos-container {
-      height: calc(100vh - 96px);
+      height: 100%;
       display: flex;
-      gap: 24px;
+      gap: 16px;
       overflow: hidden;
       font-family: 'Inter', sans-serif;
+      width: 100%;
     }
     .pos-left-panel {
       flex: 1;
+      min-width: 0; /* IMPEDE O CRESCIMENTO INFINITO NO FLEXBOX */
       display: flex;
       flex-direction: column;
       gap: 16px;
       background: white;
       border-radius: 16px;
-      padding: 24px;
+      padding: 20px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      overflow: hidden;
     }
     .search-wrapper .ant-input-affix-wrapper {
       padding: 12px 16px;
@@ -59,16 +65,26 @@ const POSStyles = () => (
     .search-wrapper input {
       font-size: 16px;
     }
+    .custom-cart-table-wrapper {
+      flex: 1;
+      overflow: hidden;
+      border: 1px solid #eef2f5;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+    .custom-cart-table {
+      width: 100%;
+    }
     .custom-cart-table .ant-table-thead > tr > th {
       background: #f4f5f7;
       color: #5e6c84;
       font-weight: 600;
-      border-bottom: none;
-      border-radius: 8px 8px 0 0;
+      border-bottom: 1px solid #eef2f5;
     }
     .custom-cart-table .ant-table-tbody > tr > td {
       border-bottom: 1px solid #f0f0f0;
-      padding: 16px;
+      padding: 12px 16px;
     }
     .custom-cart-table .ant-table-tbody > tr:last-child > td {
       border-bottom: none;
@@ -81,40 +97,53 @@ const POSStyles = () => (
       animation: flash-green 1s ease-out;
     }
     .pos-right-panel {
-      width: 420px;
+      width: 400px;
+      min-width: 400px;
+      max-width: 400px; /* GARANTE QUE NÃO CRESÇA */
       display: flex;
       flex-direction: column;
       gap: 16px;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .pos-right-panel::-webkit-scrollbar, .custom-cart-table-wrapper ::-webkit-scrollbar {
+      width: 6px;
+    }
+    .pos-right-panel::-webkit-scrollbar-thumb, .custom-cart-table-wrapper ::-webkit-scrollbar-thumb {
+      background-color: rgba(0,0,0,0.1);
+      border-radius: 10px;
     }
     .info-card {
       background: white;
       border-radius: 16px;
-      padding: 20px;
+      padding: 16px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.05);
       border: 1px solid #eef2f5;
+      flex-shrink: 0;
     }
     .totals-container {
       margin-top: auto;
       background: linear-gradient(135deg, #091E42 0%, #172B4D 100%);
       color: white;
       border-radius: 16px;
-      padding: 24px;
+      padding: 20px;
       box-shadow: 0 8px 24px rgba(9, 30, 66, 0.25);
+      flex-shrink: 0;
     }
     .totals-container .ant-typography {
       color: rgba(255,255,255,0.8);
     }
     .totals-container .amount-display {
-      font-size: 52px;
+      font-size: 48px;
       font-weight: 800;
       color: #ffffff;
       line-height: 1;
-      margin: 8px 0 24px 0;
+      margin: 4px 0 16px 0;
       letter-spacing: -1.5px;
     }
     .action-btn-lg {
-      height: 56px;
-      font-size: 16px;
+      height: 52px;
+      font-size: 15px;
       font-weight: 700;
       border-radius: 12px;
       display: flex;
@@ -123,28 +152,12 @@ const POSStyles = () => (
       gap: 8px;
       border: none;
     }
-    .action-btn-lg.btn-success {
-      background: #36B37E;
-      color: white;
-    }
-    .action-btn-lg.btn-success:hover {
-      background: #2D9A6C;
-    }
-    .action-btn-lg.btn-warning {
-      background: rgba(255, 255, 255, 0.1);
-      color: white;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-    }
-    .action-btn-lg.btn-warning:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
-    .action-btn-lg.btn-danger {
-      background: rgba(255, 77, 79, 0.1);
-      color: #ff4d4f;
-    }
-    .action-btn-lg.btn-danger:hover {
-      background: rgba(255, 77, 79, 0.2);
-    }
+    .action-btn-lg.btn-success { background: #36B37E; color: white; }
+    .action-btn-lg.btn-success:hover { background: #2D9A6C; }
+    .action-btn-lg.btn-warning { background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255, 255, 255, 0.2); }
+    .action-btn-lg.btn-warning:hover { background: rgba(255, 255, 255, 0.2); }
+    .action-btn-lg.btn-danger { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; }
+    .action-btn-lg.btn-danger:hover { background: rgba(255, 77, 79, 0.2); }
     .key-badge {
       background: rgba(255,255,255,0.25);
       padding: 2px 8px;
@@ -153,45 +166,17 @@ const POSStyles = () => (
       margin-right: 6px;
       font-weight: 600;
     }
-    .key-badge-dark {
-      background: rgba(0, 0, 0, 0.1);
-      color: inherit;
-    }
-    .product-option-item {
-      padding: 8px 0;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .product-option-item img {
-      width: 48px;
-      height: 48px;
-      border-radius: 8px;
-      object-fit: cover;
-    }
-    .multiplier-btn {
-      border-color: #eef2f5;
-      color: #5e6c84;
-      font-weight: 600;
-      background: #f9fafb;
-      border-radius: 8px;
-      transition: all 0.2s;
-    }
-    .multiplier-btn:hover {
-      border-color: #0052CC;
-      color: #0052CC;
-      background: #ebf3ff;
-      transform: translateY(-1px);
-    }
-    .shortcut-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid #f0f0f0;
-      font-size: 15px;
-    }
-    .shortcut-row:last-child {
-      border-bottom: none;
+    .key-badge-dark { background: rgba(0, 0, 0, 0.1); color: inherit; }
+    .product-option-item { padding: 8px 0; display: flex; align-items: center; gap: 12px; }
+    .product-option-item img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; }
+    .multiplier-btn { border-color: #eef2f5; color: #5e6c84; font-weight: 600; background: #f9fafb; border-radius: 8px; transition: all 0.2s; }
+    .multiplier-btn:hover { border-color: #0052CC; color: #0052CC; background: #ebf3ff; transform: translateY(-1px); }
+    .shortcut-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f0f0f0; font-size: 15px; }
+    .shortcut-row:last-child { border-bottom: none; }
+    
+    @media (max-width: 1200px) {
+      .pos-right-panel { width: 340px; min-width: 340px; max-width: 340px; }
+      .totals-container .amount-display { font-size: 38px; }
     }
   `}</style>
 );
@@ -232,6 +217,10 @@ const POSPage = () => {
   const [isHeldOrdersModalVisible, setIsHeldOrdersModalVisible] = useState(false);
   const [heldOrders, setHeldOrders] = useState([]);
 
+  const [isCloseRegisterModalVisible, setIsCloseRegisterModalVisible] = useState(false);
+  const [closingBalance, setClosingBalance] = useState(0);
+  const [closeRegisterLoading, setCloseRegisterLoading] = useState(false);
+  const [closingSummary, setClosingSummary] = useState(null); 
   const [searchValue, setSearchValue] = useState('');
   const [autocompleteOptions, setAutocompleteOptions] = useState([]);
   const [lastAddedItem, setLastAddedItem] = useState(null);
@@ -547,6 +536,20 @@ const POSPage = () => {
       }
   };
 
+  const handleCloseCashRegister = async () => {
+    setCloseRegisterLoading(true);
+    try {
+      const response = await ApiService.closeCashRegister({ closing_balance: closingBalance });
+      setClosingSummary(response.data); // Salva os dados para exibir o Dashboard
+      setIsCloseRegisterModalVisible(false);
+      message.success('Caixa fechado com sucesso!');
+    } catch (error) {
+      message.error(error.response?.data?.detail || 'Erro ao fechar o caixa.');
+    } finally {
+      setCloseRegisterLoading(false);
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'F6') { e.preventDefault(); handleOpenPaymentModal(); }
@@ -579,7 +582,7 @@ const POSPage = () => {
             style={{ backgroundColor: '#f0f2f5', borderRadius: 8 }} 
           />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <Text strong style={{ fontSize: 15 }}>{name}</Text>
+            <Text strong style={{ fontSize: 14 }}>{name}</Text>
             {r.stock <= 0 ? (
               <Tag color="error" style={{ width: 'fit-content', marginTop: 4 }}>Sem Estoque</Tag>
             ) : (
@@ -592,12 +595,12 @@ const POSPage = () => {
     { 
       title: 'Qtd', 
       key: 'qty', 
-      width: 140, 
+      width: 120, 
       align: 'center', 
       render: (_, r) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', borderRadius: 8, padding: '4px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5', borderRadius: 8, padding: '2px 4px' }}>
           <Button type="text" size="small" icon={<MinusOutlined />} onClick={() => updateQty(r, -1)} loading={isSyncing} />
-          <Text strong style={{ margin: '0 12px', width: 24, textAlign: 'center', fontSize: 16 }}>{r.quantity}</Text>
+          <Text strong style={{ margin: '0 8px', width: 20, textAlign: 'center', fontSize: 15 }}>{r.quantity}</Text>
           <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => updateQty(r, 1)} loading={isSyncing} />
         </div>
       ) 
@@ -606,15 +609,15 @@ const POSPage = () => {
       title: 'Total', 
       key: 'total', 
       align: 'right', 
-      width: 120,
-      render: (_, r) => <Text strong style={{ fontSize: 16 }}>R$ {(r.price * r.quantity).toFixed(2)}</Text> 
+      width: 100,
+      render: (_, r) => <Text strong style={{ fontSize: 15 }}>R$ {(r.price * r.quantity).toFixed(2)}</Text> 
     },
     { 
       key: 'act', 
-      width: 60, 
+      width: 50, 
       align: 'center',
       render: (_, r) => (
-        <Tooltip title="Remover item">
+        <Tooltip title="Remover">
           <Button type="text" danger icon={<DeleteOutlined style={{ fontSize: 16 }}/>} onClick={() => updateQty(r, -9999)} />
         </Tooltip>
       ) 
@@ -630,7 +633,7 @@ const POSPage = () => {
         
         {/* Painel Esquerdo: Produtos e Carrinho */}
         <div className="pos-left-panel">
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
              {[2, 3, 4, 5, 6, 10, 12].map(n => (
                  <Button key={n} size="middle" onClick={() => handleQuickMultiplier(n)} className="multiplier-btn" icon={<ThunderboltFilled style={{fontSize: 12}} />}>
                    +{n}
@@ -641,23 +644,22 @@ const POSPage = () => {
              </Button>
           </div>
 
-          <div className="search-wrapper">
+          <div className="search-wrapper" style={{ flexShrink: 0 }}>
             <AutoComplete 
-  options={autocompleteOptions} 
-  style={{ width: '100%' }} 
-  onSelect={(_, opt) => {
-    let qtyMultiplier = 1;
-    // Verifica se existe um multiplicador no início da busca (ex: "5*", "12x")
-    const match = searchValue.match(/^(\d+)[x\*]/i);
-    if (match) {
-      qtyMultiplier = parseInt(match[1], 10);
-    }
-    addProductToCart(opt.productData, qtyMultiplier);
-  }} 
-  onSearch={setSearchValue} 
-  value={searchValue} 
-  backfill
->
+              options={autocompleteOptions} 
+              style={{ width: '100%' }} 
+              onSelect={(_, opt) => {
+                let qtyMultiplier = 1;
+                const match = searchValue.match(/^(\d+)[x\*]/i);
+                if (match) {
+                  qtyMultiplier = parseInt(match[1], 10);
+                }
+                addProductToCart(opt.productData, qtyMultiplier);
+              }} 
+              onSearch={setSearchValue} 
+              value={searchValue} 
+              backfill
+            >
               <Input 
                 ref={searchInputRef} 
                 size="large" 
@@ -673,14 +675,14 @@ const POSPage = () => {
             </AutoComplete>
           </div>
 
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div className="custom-cart-table-wrapper">
             <Table 
               className="custom-cart-table" 
               columns={columns} 
               dataSource={cartItems} 
               rowKey="key" 
               pagination={false} 
-              scroll={{ y: 'calc(100vh - 350px)' }} 
+              scroll={{ y: 'calc(100vh - 280px)' }} 
               rowClassName={(r) => r.id === lastAddedItem?.id ? 'row-highlight-new' : ''} 
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Caixa livre. Inicie uma venda adicionando produtos." /> }} 
             />
@@ -690,7 +692,7 @@ const POSPage = () => {
         {/* Painel Direito: Cliente, Último Item e Totais */}
         <div className="pos-right-panel">
           {activeOrderId && (
-            <div style={{ background: '#E3FCEF', padding: '12px 16px', borderRadius: 12, color: '#006644', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600 }}>
+            <div style={{ background: '#E3FCEF', padding: '12px 16px', borderRadius: 12, color: '#006644', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
               <SaveOutlined /> Venda #{activeOrderId} em andamento
             </div>
           )}
@@ -699,9 +701,10 @@ const POSPage = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                 <Text type="secondary" strong style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>Cliente</Text>
                 <div style={{display:'flex', gap: 12}}>
+                    <Button type="link" danger size="small" style={{ padding: 0, fontWeight: 600 }} icon={<LockOutlined />} onClick={() => setIsCloseRegisterModalVisible(true)}>Fechar Caixa</Button>
                     <Button type="link" size="small" style={{ padding: 0, fontWeight: 600 }} onClick={fetchHeldOrders}>Recuperar (F4)</Button>
                     {!selectedCustomer && (
-                      <Button type="link" size="small" style={{ padding: 0, fontWeight: 600 }} onClick={() => setIsCustomerModalVisible(true)}>+ Novo Cliente</Button>
+                      <Button type="link" size="small" style={{ padding: 0, fontWeight: 600 }} onClick={() => setIsCustomerModalVisible(true)}>+ Novo</Button>
                     )}
                 </div>
             </div>
@@ -740,7 +743,7 @@ const POSPage = () => {
             )}
           </div>
 
-          <div className="info-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: 220 }}>
+          <div className="info-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: 180 }}>
             <AnimatePresence mode="wait">
               {lastAddedItem ? (
                 <motion.div 
@@ -753,8 +756,8 @@ const POSPage = () => {
                   <Badge count={lastAddedItem.quantity > 1 ? `x${cartItems.find(i=>i.id===lastAddedItem.id)?.quantity}` : 0} color="#0052CC" offset={[-10, 10]}>
                     <Image 
                       src={lastAddedItem.image_url} 
-                      width={140} 
-                      height={140} 
+                      width={120} 
+                      height={120} 
                       style={{ objectFit: 'cover', borderRadius: 16, border: '4px solid #f4f5f7' }} 
                       preview={false} 
                       fallback="https://via.placeholder.com/150?text=Sem+Foto" 
@@ -762,7 +765,7 @@ const POSPage = () => {
                   </Badge>
                   <Title level={4} style={{ marginTop: 16, marginBottom: 4 }}>{lastAddedItem.name}</Title>
                   <Text type="secondary" style={{ fontSize: 16 }}>R$ {lastAddedItem.price.toFixed(2)} / un</Text>
-                  <div style={{ marginTop: 16, color: '#36B37E', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 14, fontWeight: 600 }}>
+                  <div style={{ marginTop: 12, color: '#36B37E', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 14, fontWeight: 600 }}>
                     <CheckCircleFilled /> Adicionado com sucesso
                   </div>
                 </motion.div>
@@ -786,12 +789,12 @@ const POSPage = () => {
               </div>
             )}
             
-            <Divider style={{ borderColor: 'rgba(255,255,255,0.15)', margin: '16px 0' }} />
+            <Divider style={{ borderColor: 'rgba(255,255,255,0.15)', margin: '12px 0' }} />
             
             <Text style={{ fontSize: 14, letterSpacing: 1 }}>TOTAL A PAGAR</Text>
             <div className="amount-display">R$ {subtotal.toFixed(2)}</div>
             
-            <Space direction="vertical" style={{ width: '100%' }} size={16}>
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
               <Button 
                 className="action-btn-lg btn-success" 
                 block 
@@ -801,7 +804,7 @@ const POSPage = () => {
                 <span className="key-badge">F6</span> FINALIZAR VENDA
               </Button>
               
-              <div style={{ display: 'flex', gap: 16 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
                   <Button 
                     className="action-btn-lg btn-warning" 
                     style={{ flex: 1 }} 
@@ -839,7 +842,7 @@ const POSPage = () => {
         open={isCustomerModalVisible} 
         onCancel={() => setIsCustomerModalVisible(false)} 
         footer={null} 
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginTop: 24 }}>
           <CustomerForm form={customerForm} onFinish={handleCreateCustomer} onCancel={() => setIsCustomerModalVisible(false)} />
@@ -906,6 +909,92 @@ const POSPage = () => {
             )}
             locale={{ emptyText: <Empty description="Nenhuma venda em espera no momento." /> }}
           />
+      </Modal>
+
+      <Modal
+        title={<Title level={3} style={{ margin: 0, textAlign: 'center' }}>Resumo de Fechamento</Title>}
+        open={!!closingSummary}
+        onOk={() => { setClosingSummary(null); navigate('/open-cash-register'); }}
+        onCancel={() => { setClosingSummary(null); navigate('/open-cash-register'); }}
+        okText="Finalizar e Sair"
+        cancelButtonProps={{ style: { display: 'none' } }}
+        closable={false}
+        maskClosable={false}
+        width={500}
+      >
+        {closingSummary && (
+          <div style={{ marginTop: 24 }}>
+            <Row gutter={[16, 16]}>
+              <Col span={12}>
+  <Card bordered={false} style={{ background: '#f9fafb' }}>
+    <Statistic title="Fundo de Caixa (Abertura)" value={closingSummary.opening_balance} precision={2} prefix="R$" />
+  </Card>
+</Col>
+              <Col span={12}>
+                <Card bordered={false} style={{ background: '#e6f7ff' }}>
+                  <Statistic title="Total de Vendas no Período" value={closingSummary.total_sales} precision={2} prefix="R$" valueStyle={{ color: '#1890ff' }} />
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card bordered={false} style={{ background: '#f4f5f7' }}>
+                  <Statistic title="Valor Informado (Gaveta)" value={closingSummary.closing_balance} precision={2} prefix="R$" />
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card bordered={false} style={{ background: closingSummary.difference === 0 ? '#f6ffed' : (closingSummary.difference > 0 ? '#f6ffed' : '#fff2f0') }}>
+                  <Statistic 
+                    title="Diferença de Quebra" 
+                    value={closingSummary.difference} 
+                    precision={2} 
+                    prefix="R$" 
+                    valueStyle={{ color: closingSummary.difference === 0 ? '#36B37E' : (closingSummary.difference > 0 ? '#36B37E' : '#cf1322') }} 
+                  />
+                </Card>
+              </Col>
+            </Row>
+            <Divider />
+            <div style={{ textAlign: 'center' }}>
+              <Text type="secondary">Caixa aberto em: {new Date(closingSummary.opened_at).toLocaleString()}</Text><br/>
+              <Text type="secondary">Fechado em: {new Date(closingSummary.closed_at).toLocaleString()}</Text>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title={<Title level={4} style={{ margin: 0, color: '#ff4d4f' }}><LockOutlined /> Fechar Caixa</Title>}
+        open={isCloseRegisterModalVisible}
+        onCancel={() => setIsCloseRegisterModalVisible(false)}
+        onOk={handleCloseCashRegister}
+        okText="Confirmar Fechamento"
+        cancelText="Cancelar"
+        confirmLoading={closeRegisterLoading}
+        okButtonProps={{ danger: true, size: 'large' }}
+        cancelButtonProps={{ size: 'large' }}
+      >
+        <div style={{ marginTop: 16, marginBottom: 16 }}>
+          <Text style={{ fontSize: 16 }}>Informe o valor total em dinheiro presente na gaveta neste momento:</Text>
+          <div style={{ marginTop: 16 }}>
+            <InputNumber
+              size="large"
+              style={{ width: '100%' }}
+              prefix="R$"
+              min={0}
+              step={0.01}
+              precision={2}
+              value={closingBalance}
+              onChange={(value) => setClosingBalance(value)}
+              placeholder="0.00"
+            />
+          </div>
+          <Alert 
+            message="Atenção" 
+            description="Ao fechar o caixa, você não poderá realizar novas vendas até realizar uma nova abertura." 
+            type="warning" 
+            showIcon 
+            style={{ marginTop: 16 }} 
+          />
+        </div>
       </Modal>
     </div>
   );

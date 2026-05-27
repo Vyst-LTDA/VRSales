@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 class CashRegisterBase(BaseModel):
-    pass
+    opening_balance: float
 
 class CashRegisterOpen(CashRegisterBase):
     opening_balance: float = Field(..., gt=0, description="Valor de abertura do caixa.")
@@ -50,3 +50,6 @@ class CashRegisterCreate(CashRegisterBase):
 class CashRegisterUpdate(BaseModel):
     status: Optional[CashRegisterStatus] = None
     closing_balance: Optional[float] = None
+
+class CashRegisterClose(BaseModel):
+    closing_balance: float

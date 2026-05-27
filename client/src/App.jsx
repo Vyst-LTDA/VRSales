@@ -31,6 +31,7 @@ import FloorPlanSettingsPage from './pages/FloorPlanSettingsPage';
 import GlobalDashboardPage from './pages/superadmin/GlobalDashboardPage';
 import StoresManagementPage from './pages/superadmin/StoresManagementPage';
 import ReservationPage from './pages/ReservationPage';
+import CashRegisterHistoryPage from './pages/CashRegisterHistoryPage'; // <--- NOVA IMPORTAÇÃO
 import RoleBasedRoute from './components/RoleBasedRoute';
 
 const { Header, Content } = Layout;
@@ -51,6 +52,7 @@ const MainLayout = () => {
     '/pos': 'Frente de Caixa',
     '/dashboard': 'Dashboard',
     '/sales-history': 'Histórico de Vendas',
+    '/cash-register-history': 'Histórico de Fechamentos', // <--- NOVO TÍTULO
     '/products': 'Gestão de Produtos',
     '/tables': 'Mesas e Comandas',
     '/customers': 'Clientes',
@@ -74,9 +76,6 @@ const MainLayout = () => {
     { type: 'divider' },
     { key: 'logout', icon: <LogoutOutlined />, label: 'Sair', danger: true, onClick: logout },
   ];
-
-  // Menu Rápido (Reutiliza a HomePage dentro de um Drawer se quiser, ou navegação simples)
-  // Por simplicidade, o botão Home já serve como menu rápido para voltar ao Hub.
 
   if (!user) { return <Navigate to="/login" replace />; }
 
@@ -181,6 +180,7 @@ const App = () => {
           <Route path="marketing" element={<MarketingPage />} />
           <Route path="kds" element={<KDSPage />} />
           <Route path="sales-history" element={<SalesHistoryPage />} />
+          <Route path="cash-register-history" element={<CashRegisterHistoryPage />} /> {/* <--- NOVA ROTA */}
         </Route>
 
         <Route element={<RoleBasedRoute allowedRoles={['admin', 'super_admin']} />}>

@@ -1,14 +1,14 @@
 // client/src/pages/HomePage.jsx
 import React from 'react';
-import { Typography, Card, Row, Col, Statistic } from 'antd';
+import { Typography, Card, Row, Col } from 'antd';
 import { useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import {
   ShoppingCartOutlined, PieChartOutlined, UserOutlined,
   AppstoreOutlined, TableOutlined, LineChartOutlined,
-  RocketOutlined, FireOutlined, BookOutlined,
-  TeamOutlined, SafetyCertificateOutlined, HistoryOutlined,
+  FireOutlined, BookOutlined, TeamOutlined, 
+  SafetyCertificateOutlined, HistoryOutlined,
   CalendarOutlined, ShopOutlined, LayoutOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
@@ -36,6 +36,14 @@ const HomePage = () => {
       color: '#00A3BF', // Ciano
       roles: ['admin', 'manager'],
       description: 'Visão geral e métricas'
+    },
+    {
+      title: 'Fechamentos',
+      path: '/cash-register-history', // <--- ROTA CORRETA
+      icon: <FireOutlined style={{ fontSize: '32px' }} />,
+      color: '#FF5630', // Vermelho
+      roles: ['admin', 'manager'],
+      description: 'Histórico de caixas e quebras'
     },
     {
       title: 'Histórico de Vendas',
@@ -77,7 +85,6 @@ const HomePage = () => {
       roles: ['admin', 'manager', 'cashier'],
       description: 'Agendamento de mesas'
     },
-
     {
       title: 'Relatórios',
       path: '/reports',

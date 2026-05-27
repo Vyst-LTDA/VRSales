@@ -76,6 +76,8 @@ const ApiService = {
   // Caixa
   getCashRegisterStatus: () => ApiService.get('/cash-registers/status'),
   openCashRegister: (data) => ApiService.post('/cash-registers/open', data),
+  closeCashRegister: (data) => ApiService.post('/cash-registers/close', data),
+  getCashRegisterHistory: () => ApiService.get('/cash-registers/history'), 
 
   // Produtos
   getProducts: (params) => ApiService.get('/products/', { params }),
