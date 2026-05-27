@@ -51,7 +51,7 @@ async def create_order(
     
     order = await crud_order.create(db=db, obj_in=OrderCreate(**order_data), current_user=current_user)
     
-    # --- CORREÇÃO: Salva o ID antes de qualquer operação que expire o objeto ---
+    # Salva o ID antes de qualquer operação que expire o objeto
     new_order_id = order.id 
     
     if items_in:
@@ -60,19 +60,17 @@ async def create_order(
         
         await db.commit()
         
-        # Limpa o cache (objeto 'order' fica inválido para leitura direta)
-        db.expire_all() 
-        
-        # --- CORREÇÃO: Usa a variável 'new_order_id' em vez de 'order.id' ---
-        stmt = select(Order).where(Order.id == new_order_id).options(
-            selectinload(Order.items).selectinload(OrderItem.product),
-            selectinload(Order.customer),
-            selectinload(Order.user)
-        )
-        result = await db.execute(stmt)
-        order = result.scalars().first()
+    # Limpa o cache (objeto 'order' fica inválido para leitura direta)
+    db.expire_all() 
     
-    return order
+    # --- CORREÇÃO: Em vez de recriar um 'select' incompleto, usamos a sua
+    # função get_full_order que já faz todos os joins profundos necessários. ---
+    final_order = await get_full_order(db=db, id=new_order_id)
+    
+    if not final_order:
+        raise HTTPException(status_code=404, detail="Erro ao carregar a comanda recém-criada.")
+        
+    return final_order
 
 @router.post("/{order_id}/items", response_model=OrderSchema)
 async def add_item_to_order(

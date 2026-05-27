@@ -62,14 +62,6 @@ const HomePage = () => {
       description: 'Catálogo e estoque'
     },
     {
-      title: 'Painel da Cozinha',
-      path: '/kds',
-      icon: <FireOutlined style={{ fontSize: '32px' }} />,
-      color: '#DE350B', // Vermelho
-      roles: ['admin', 'manager'],
-      description: 'Gerenciamento de pedidos KDS'
-    },
-    {
       title: 'Clientes',
       path: '/customers',
       icon: <UserOutlined style={{ fontSize: '32px' }} />,
@@ -85,14 +77,7 @@ const HomePage = () => {
       roles: ['admin', 'manager', 'cashier'],
       description: 'Agendamento de mesas'
     },
-    {
-      title: 'Marketing',
-      path: '/marketing',
-      icon: <RocketOutlined style={{ fontSize: '32px' }} />,
-      color: '#FF5630', // Vermelho alaranjado
-      roles: ['admin', 'manager'],
-      description: 'Campanhas e promoções'
-    },
+
     {
       title: 'Relatórios',
       path: '/reports',

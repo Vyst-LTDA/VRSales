@@ -333,7 +333,12 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
                 Order.order_type == OrderType.TAKEOUT
             )
             .options(
-                selectinload(Order.items).selectinload(OrderItem.product),
+                selectinload(Order.items).joinedload(OrderItem.product).options(
+                    joinedload(Product.category).selectinload(ProductCategory.subcategories),
+                    joinedload(Product.subcategory),
+                    joinedload(Product.supplier),
+                    selectinload(Product.variations)
+                ),
                 selectinload(Order.customer)
             )
             .order_by(Order.created_at.desc())
@@ -371,7 +376,7 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         stmt = select(OrderItem).where(OrderItem.id == item_id, OrderItem.order_id == order_id)
         result = await db.execute(stmt)
         item = result.scalars().first()
-        s
+        
         if not item:
             raise HTTPException(status_code=404, detail="Item não encontrado.")
             
@@ -379,5 +384,4 @@ class CRUDOrder(CRUDBase[Order, OrderCreate, OrderUpdate]):
         await db.commit()
         
         return await get_full_order(db, id=order_id)
-
 order = CRUDOrder(Order)

@@ -48,28 +48,28 @@ async def init_db() -> None:
 
     # Opcional: Adicionar dados iniciais aqui se necessário
     # Exemplo: Criar um usuário super_admin inicial
-    # from sqlalchemy.ext.asyncio import AsyncSession
-    # from app.db.session import AsyncSessionLocal
-    # from app.core.security import get_password_hash
-    # from app.schemas.enums import UserRole
-    #
-    # logger.info("Criando usuário super_admin inicial...")
-    # async with AsyncSessionLocal() as db:
-    #     super_admin = User(
-    #         full_name="Admin Principal",
-    #         email="admin@example.com", # Troque este email!
-    #         hashed_password=get_password_hash("admin123"), # Troque esta senha!
-    #         role=UserRole.SUPER_ADMIN,
-    #         is_active=True,
-    #         store_id=None # Super admin não tem loja
-    #     )
-    #     db.add(super_admin)
-    #     try:
-    #         await db.commit()
-    #         logger.info("Usuário super_admin criado.")
-    #     except Exception as e:
-    #         logger.error(f"Erro ao criar super_admin: {e}")
-    #         await db.rollback()
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.db.session import AsyncSessionLocal
+    from app.core.security import get_password_hash
+    from app.schemas.enums import UserRole
+    
+    logger.info("Criando usuário super_admin inicial...")
+    async with AsyncSessionLocal() as db:
+         super_admin = User(
+             full_name="Admin Principal",
+             email="admin@example.com", # Troque este email!
+             hashed_password=get_password_hash("admin123"), # Troque esta senha!
+             role=UserRole.SUPER_ADMIN,
+             is_active=True,
+             store_id=None # Super admin não tem loja
+         )
+         db.add(super_admin)
+         try:
+             await db.commit()
+             logger.info("Usuário super_admin criado.")
+         except Exception as e:
+             logger.error(f"Erro ao criar super_admin: {e}")
+             await db.rollback()
 
     logger.info("Processo de inicialização do banco de dados concluído.")
 
