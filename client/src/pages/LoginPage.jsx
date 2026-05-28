@@ -31,25 +31,31 @@ const LoginPage = () => {
     setLoading(true);
     setError('');
     try {
-      // A função 'login' agora retorna os dados do usuário (ou null se falhar)
       const userData = await login(values.email, values.password);
 
       if (userData && userData.role) {
         message.success('Login bem-sucedido! Redirecionando...');
-        
-        // Lógica de redirecionamento agora é segura
         if (userData.role === 'super_admin') {
           navigate('/global-dashboard');
         } else {
-          navigate('/'); // Rota padrão para outros usuários
+          navigate('/');
         }
       } else {
-         // Este erro acontecerá se o login for ok, mas a busca por /users/me falhar
-         throw new Error("Login bem-sucedido, mas não foi possível obter os dados do usuário.");
+         throw new Error("Login bem-sucedido, mas não foi possível obter os dados.");
       }
 
     } catch (err) {
-      setError('Email ou senha inválidos. Por favor, tente novamente.');
+      // --- ALTERAÇÃO AQUI: Capturando a mensagem do backend ---
+      const backendErrorMsg = err.response?.data?.detail;
+      
+      if (backendErrorMsg) {
+        // Se for erro 403 da loja inativa, ou 400 de usuário inativo
+        setError(backendErrorMsg);
+      } else {
+        // Fallback genérico para falha de rede
+        setError('Email ou senha inválidos. Por favor, tente novamente.');
+      }
+      // --------------------------------------------------------
       console.error(err);
     } finally {
       setLoading(false);

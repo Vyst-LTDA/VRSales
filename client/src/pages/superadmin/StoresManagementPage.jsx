@@ -114,7 +114,7 @@ const StoresManagementPage = () => {
         try {
             const payload = { ...values, is_active: !!values.is_active };
             if (editingStore) {
-                await ApiService.put(`/stores/${editingStore.id}/`, payload);
+                await ApiService.put(`/stores/${editingStore.id}`, payload);
                 message.success('Loja atualizada com sucesso!');
             } else {
                 await ApiService.post('/stores/', payload);

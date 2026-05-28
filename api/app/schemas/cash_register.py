@@ -37,7 +37,7 @@ class CashRegister(CashRegisterBase):
     status: str # Ou o Enum apropriado
     opened_at: datetime
     closed_at: Optional[datetime]
-
+    closing_balance: Optional[float] = None
 
     class Config:
         orm_mode = True

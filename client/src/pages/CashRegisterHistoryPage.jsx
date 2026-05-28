@@ -115,7 +115,7 @@ const CashRegisterHistoryPage = () => {
             key: 'closing_balance',
             width: '15%',
             render: (_, record) => (
-                record.closing_balance !== null 
+                record.closing_balance != null 
                     ? <Text strong style={{ color: '#0052CC' }}>{formatMoney(record.closing_balance)}</Text>
                     : <Text type="secondary">-</Text>
             ),

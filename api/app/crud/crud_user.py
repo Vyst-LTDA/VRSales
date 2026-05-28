@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 from typing import Optional
-
+from sqlalchemy.orm import selectinload
 from app.crud.base import CRUDBase
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
@@ -10,7 +10,12 @@ from app.core.security import get_password_hash, verify_password
 
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     async def get_by_email(self, db: AsyncSession, *, email: str) -> Optional[User]:
-        result = await db.execute(select(User).filter(User.email == email))
+        # --- ALTERADO PARA CARREGAR A LOJA JUNTO (selectinload) ---
+        result = await db.execute(
+            select(User)
+            .options(selectinload(User.store))
+            .filter(User.email == email)
+        )
         return result.scalars().first()
 
     async def authenticate(

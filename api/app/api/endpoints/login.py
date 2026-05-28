@@ -12,17 +12,12 @@ from app.schemas.token_schema import Token
 
 router = APIRouter()
 
-# --- CORREÇÃO APLICADA AQUI ---
-# A rota foi alterada de volta para "/token" para corresponder à chamada do frontend.
 @router.post("/token", response_model=Token)
-# -----------------------------
 async def login_access_token(
     db: AsyncSession = Depends(dependencies.get_db),
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
-    """
-    OAuth2 compatível com token de acesso para login.
-    """
+    
     user = await crud.user.authenticate(
         db, email=form_data.username, password=form_data.password
     )
@@ -31,9 +26,17 @@ async def login_access_token(
     elif not user.is_active:
         raise HTTPException(status_code=400, detail="Usuário inativo")
     
+    # --- NOVA VERIFICAÇÃO DE LOJA INATIVA ADICIONADA AQUI ---
+    if user.store_id is not None and user.store is not None:
+        if not user.store.is_active:
+            raise HTTPException(
+                status_code=403, 
+                detail="Esta loja foi inativada por pendências. Por favor, entre em contato com financeiro@seudominio.com.br"
+            )
+    # --------------------------------------------------------
+    
     access_token_expires = timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # O conteúdo do token deve usar "sub" (subject) como padrão JWT
     token_data = {"sub": str(user.id)}
     
     return {
