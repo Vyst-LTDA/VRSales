@@ -1,6 +1,6 @@
 // client/src/pages/HomePage.jsx
 import React from 'react';
-import { Typography, Card, Row, Col } from 'antd';
+import { Typography, Card, Row, Col, Alert } from 'antd';
 import { useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
@@ -9,7 +9,8 @@ import {
   AppstoreOutlined, TableOutlined, LineChartOutlined,
   FireOutlined, BookOutlined, TeamOutlined, 
   SafetyCertificateOutlined, HistoryOutlined,
-  CalendarOutlined, ShopOutlined, LayoutOutlined
+  CalendarOutlined, ShopOutlined, LayoutOutlined,
+  BugOutlined 
 } from '@ant-design/icons';
 import { useAuth } from '../context/AuthContext';
 
@@ -19,13 +20,12 @@ const HomePage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Definição de todos os módulos do sistema
   const allModules = [
     {
       title: 'Frente de Caixa',
       path: '/pos',
       icon: <ShoppingCartOutlined style={{ fontSize: '32px' }} />,
-      color: '#0052CC', // Azul forte
+      color: '#0052CC', 
       roles: ['admin', 'manager', 'cashier'],
       description: 'Realizar vendas e gerenciar caixa'
     },
@@ -33,15 +33,15 @@ const HomePage = () => {
       title: 'Dashboard',
       path: '/dashboard',
       icon: <PieChartOutlined style={{ fontSize: '32px' }} />,
-      color: '#00A3BF', // Ciano
+      color: '#00A3BF', 
       roles: ['admin', 'manager'],
       description: 'Visão geral e métricas'
     },
     {
       title: 'Fechamentos',
-      path: '/cash-register-history', // <--- ROTA CORRETA
+      path: '/cash-register-history', 
       icon: <FireOutlined style={{ fontSize: '32px' }} />,
-      color: '#FF5630', // Vermelho
+      color: '#FF5630', 
       roles: ['admin', 'manager'],
       description: 'Histórico de caixas e quebras'
     },
@@ -49,7 +49,7 @@ const HomePage = () => {
       title: 'Histórico de Vendas',
       path: '/sales-history',
       icon: <HistoryOutlined style={{ fontSize: '32px' }} />,
-      color: '#6554C0', // Roxo
+      color: '#6554C0', 
       roles: ['admin', 'manager'],
       description: 'Consultar vendas passadas'
     },
@@ -57,7 +57,7 @@ const HomePage = () => {
       title: 'Comandas',
       path: '/tables',
       icon: <TableOutlined style={{ fontSize: '32px' }} />,
-      color: '#FF991F', // Laranja
+      color: '#FF991F', 
       roles: ['admin', 'manager', 'cashier'],
       description: 'Mesas e pedidos em aberto'
     },
@@ -65,7 +65,7 @@ const HomePage = () => {
       title: 'Produtos',
       path: '/products',
       icon: <AppstoreOutlined style={{ fontSize: '32px' }} />,
-      color: '#36B37E', // Verde
+      color: '#36B37E', 
       roles: ['admin', 'manager', 'cashier'],
       description: 'Catálogo e estoque'
     },
@@ -73,7 +73,7 @@ const HomePage = () => {
       title: 'Clientes',
       path: '/customers',
       icon: <UserOutlined style={{ fontSize: '32px' }} />,
-      color: '#42526E', // Cinza azulado
+      color: '#42526E', 
       roles: ['admin', 'manager', 'cashier'],
       description: 'Base de clientes e fidelidade'
     },
@@ -81,7 +81,7 @@ const HomePage = () => {
       title: 'Reservas',
       path: '/reservations',
       icon: <BookOutlined style={{ fontSize: '32px' }} />,
-      color: '#8777D9', // Lilás
+      color: '#8777D9', 
       roles: ['admin', 'manager', 'cashier'],
       description: 'Agendamento de mesas'
     },
@@ -89,7 +89,7 @@ const HomePage = () => {
       title: 'Relatórios',
       path: '/reports',
       icon: <LineChartOutlined style={{ fontSize: '32px' }} />,
-      color: '#008DA6', // Teal
+      color: '#008DA6', 
       roles: ['admin', 'manager'],
       description: 'Análise detalhada de dados'
     },
@@ -97,7 +97,7 @@ const HomePage = () => {
       title: 'Fornecedores',
       path: '/suppliers',
       icon: <TeamOutlined style={{ fontSize: '32px' }} />,
-      color: '#253858', // Navy
+      color: '#253858', 
       roles: ['admin', 'manager'],
       description: 'Gestão de parceiros'
     },
@@ -105,7 +105,7 @@ const HomePage = () => {
       title: 'Validade',
       path: '/expiration',
       icon: <CalendarOutlined style={{ fontSize: '32px' }} />,
-      color: '#FFAB00', // Amarelo
+      color: '#FFAB00', 
       roles: ['admin', 'manager', 'cashier'],
       description: 'Controle de lotes'
     },
@@ -113,7 +113,7 @@ const HomePage = () => {
       title: 'Layout',
       path: '/settings/floor-plan',
       icon: <LayoutOutlined style={{ fontSize: '32px' }} />,
-      color: '#0065FF', // Azul
+      color: '#0065FF', 
       roles: ['admin', 'cashier'],
       description: 'Configuração do salão'
     },
@@ -121,11 +121,10 @@ const HomePage = () => {
       title: 'Usuários',
       path: '/users',
       icon: <SafetyCertificateOutlined style={{ fontSize: '32px' }} />,
-      color: '#505F79', // Slate
+      color: '#505F79', 
       roles: ['admin', 'super_admin'],
       description: 'Controle de acesso'
     },
-    // Itens Super Admin
     {
       title: 'Dashboard Global',
       path: '/global-dashboard',
@@ -142,9 +141,16 @@ const HomePage = () => {
       roles: ['super_admin'],
       description: 'Gestão de franquias'
     },
+    {
+      title: 'Chamados',
+      path: '/feedbacks',
+      icon: <BugOutlined style={{ fontSize: '32px' }} />,
+      color: '#FF416C', 
+      roles: ['super_admin'],
+      description: 'Gestão de problemas e suporte'
+    }
   ];
 
-  // Filtra módulos baseado na role do usuário
   const accessibleModules = allModules.filter(module =>
     !module.roles || module.roles.includes(user?.role)
   );
@@ -166,6 +172,18 @@ const HomePage = () => {
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+      
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <Alert
+          message="Sistema em Desenvolvimento (Beta)"
+          description="Aviso: Este sistema está atualmente em fase de desenvolvimento. Você pode encontrar bugs ou instabilidades. Caso identifique algum problema, por favor utilize o botão de chamados no canto inferior esquerdo para nos notificar."
+          type="warning"
+          showIcon
+          closable
+          style={{ marginBottom: '24px', borderRadius: '8px' }}
+        />
+      </motion.div>
+
       <div style={{ marginBottom: '40px', textAlign: 'center' }}>
         <Title level={2}>Olá, {user?.full_name?.split(' ')[0] || 'Usuário'}</Title>
         <Text type="secondary" style={{ fontSize: '16px' }}>O que você deseja gerenciar hoje?</Text>
@@ -194,11 +212,11 @@ const HomePage = () => {
                     alignItems: 'center',
                     padding: '24px 12px'
                   }}
-                  bodyStyle={{ padding: 0, width: '100%' }}
+                  styles={{ body: { padding: 0, width: '100%' } }}
                 >
                   <div
                     style={{
-                      backgroundColor: `${module.color}15`, // Cor com transparência
+                      backgroundColor: `${module.color}15`, 
                       width: '64px',
                       height: '64px',
                       borderRadius: '50%',

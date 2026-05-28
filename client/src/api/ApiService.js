@@ -73,6 +73,11 @@ const ApiService = {
   deleteWall: (wallId) => ApiService.delete(`/walls/${wallId}`),
   updateWallsLayout: (layoutData) => ApiService.put('/walls/layout', layoutData),
 
+  // Feedbacks / Chamados
+  createFeedback: (data) => ApiService.post('/feedbacks/', data),
+  getFeedbacks: () => ApiService.get('/feedbacks/'),
+  resolveFeedback: (feedbackId) => ApiService.put(`/feedbacks/${feedbackId}/resolve`),
+  
   // Caixa
   getCashRegisterStatus: () => ApiService.get('/cash-registers/status'),
   openCashRegister: (data) => ApiService.post('/cash-registers/open', data),

@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api.endpoints import (
     super_admin, stores, attributes, categories, batches, products,
     login, users, sales, cash_register, reports, additionals,
-    customers, suppliers, ingredients, tables, orders, marketing, reservations, walls
+    customers, suppliers, ingredients, tables, orders, marketing, reservations, walls, feedbacks
 )
 
 api_router = APIRouter()
@@ -16,8 +16,6 @@ api_router.include_router(customers.router, prefix="/customers", tags=["customer
 api_router.include_router(suppliers.router, prefix="/suppliers", tags=["suppliers"])
 api_router.include_router(sales.router, prefix="/sales", tags=["sales"])
 api_router.include_router(reservations.router, prefix="/reservations", tags=["reservations"]) # <-- Adicione a nova rota
-# --- CORREÇÃO APLICADA AQUI ---
-# O prefixo foi alterado para o plural para corresponder à chamada do frontend.
 api_router.include_router(cash_register.router, prefix="/cash-registers", tags=["cash-register"])
 # -----------------------------
 api_router.include_router(walls.router, prefix="/walls", tags=["walls"]) # <--- ADICIONE ESTA LINHA
@@ -30,3 +28,4 @@ api_router.include_router(marketing.router, prefix="/marketing", tags=["marketin
 api_router.include_router(batches.router, prefix="/batches", tags=["batches"])
 api_router.include_router(attributes.router, prefix="/attributes", tags=["attributes"])
 api_router.include_router(super_admin.router, prefix="/super-admin", tags=["super-admin"])  
+api_router.include_router(feedbacks.router, prefix="/feedbacks", tags=["feedbacks"]) # <--- ADICIONE ESTA LINHA

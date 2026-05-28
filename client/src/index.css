@@ -26,8 +26,9 @@ body {
 
 /* Garante que o contêiner do React ocupe toda a altura */
 #root {
-  height: 100vh;
+  min-height: 100vh; /* Alterado de height para min-height */
   display: flex;
+  flex-direction: column; /* Adicionado para organizar o flex verticalmente */
 }
 .ant-menu-dark.ant-menu-inline .ant-menu-item-divider {
     border-top-color: #374151; /* Este é o 'gray-700' do Tailwind */

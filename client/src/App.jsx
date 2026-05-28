@@ -31,8 +31,12 @@ import FloorPlanSettingsPage from './pages/FloorPlanSettingsPage';
 import GlobalDashboardPage from './pages/superadmin/GlobalDashboardPage';
 import StoresManagementPage from './pages/superadmin/StoresManagementPage';
 import ReservationPage from './pages/ReservationPage';
-import CashRegisterHistoryPage from './pages/CashRegisterHistoryPage'; // <--- NOVA IMPORTAÇÃO
+import CashRegisterHistoryPage from './pages/CashRegisterHistoryPage'; 
 import RoleBasedRoute from './components/RoleBasedRoute';
+
+// ---> NOVAS IMPORTAÇÕES DO SISTEMA DE FEEDBACK <---
+import FeedbackManagementPage from './pages/superadmin/FeedbackManagementPage';
+import FeedbackButton from './components/FeedbackButton';
 
 const { Header, Content } = Layout;
 const { Text, Title } = Typography;
@@ -52,7 +56,7 @@ const MainLayout = () => {
     '/pos': 'Frente de Caixa',
     '/dashboard': 'Dashboard',
     '/sales-history': 'Histórico de Vendas',
-    '/cash-register-history': 'Histórico de Fechamentos', // <--- NOVO TÍTULO
+    '/cash-register-history': 'Histórico de Fechamentos',
     '/products': 'Gestão de Produtos',
     '/tables': 'Mesas e Comandas',
     '/customers': 'Clientes',
@@ -65,7 +69,8 @@ const MainLayout = () => {
     '/settings/floor-plan': 'Layout do Salão',
     '/expiration': 'Controle de Validade',
     '/global-dashboard': 'Visão Global',
-    '/stores': 'Gerir Lojas'
+    '/stores': 'Gerir Lojas',
+    '/feedbacks': 'Gestão de Chamados' // <--- NOVO TÍTULO
   };
 
   const currentTitle = pageTitles[location.pathname] || 'VR Sales';
@@ -149,6 +154,9 @@ const MainLayout = () => {
           <Outlet />
         </motion.div>
       </Content>
+      
+      {/* ---> BOTÃO FLUTUANTE DE FEEDBACK GLOBAL <--- */}
+      <FeedbackButton />
     </Layout>
   );
 };
@@ -170,6 +178,7 @@ const App = () => {
         <Route element={<RoleBasedRoute allowedRoles={['super_admin']} />}>
           <Route path="global-dashboard" element={<GlobalDashboardPage />} />
           <Route path="stores" element={<StoresManagementPage />} />
+          <Route path="feedbacks" element={<FeedbackManagementPage />} /> {/* <--- NOVA ROTA */}
         </Route>
 
         {/* Rotas Admin e Manager */}
@@ -180,7 +189,7 @@ const App = () => {
           <Route path="marketing" element={<MarketingPage />} />
           <Route path="kds" element={<KDSPage />} />
           <Route path="sales-history" element={<SalesHistoryPage />} />
-          <Route path="cash-register-history" element={<CashRegisterHistoryPage />} /> {/* <--- NOVA ROTA */}
+          <Route path="cash-register-history" element={<CashRegisterHistoryPage />} /> 
         </Route>
 
         <Route element={<RoleBasedRoute allowedRoles={['admin', 'super_admin']} />}>
