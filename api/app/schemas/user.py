@@ -10,6 +10,9 @@ class UserBase(BaseModel):
     role: Optional[UserRole] = None
     store_id: Optional[int] = Field(None, description="ID da loja à qual o usuário pertence.")
 
+class UserChangePassword(BaseModel):
+    current_password: str
+    new_password: str
 
 class UserCreate(BaseModel):
     email: EmailStr

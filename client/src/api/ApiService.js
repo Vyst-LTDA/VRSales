@@ -65,6 +65,7 @@ const ApiService = {
     });
   },
   getCurrentUser: () => ApiService.get('/users/me'),
+  changePassword: (data) => ApiService.put('/users/me/password', data),
 
   // Walls
   getWalls: () => ApiService.get('/walls/'),

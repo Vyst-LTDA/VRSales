@@ -1,12 +1,14 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.schemas.user import UserChangePassword
+from app.core.security import verify_password, get_password_hash
 from app import crud
 from app.api import dependencies
 from app.models.user import User as UserModel
 from app.schemas.enums import UserRole
 from app.schemas.user import User as UserSchema, UserCreate
+from app.api.dependencies import get_db, get_current_active_user
 
 router = APIRouter()
 
@@ -78,3 +80,18 @@ async def read_users(
     """
     users = await crud.user.get_multi(db, skip=skip, limit=limit, current_user=current_user) # E AQUI
     return users
+
+@router.put("/me/password")
+async def change_password(
+    password_in: UserChangePassword,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Permite ao usuário logado alterar sua própria senha."""
+    if not verify_password(password_in.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Senha atual incorreta.")
+    
+    current_user.hashed_password = get_password_hash(password_in.new_password)
+    db.add(current_user)
+    await db.commit()
+    return {"message": "Senha atualizada com sucesso!"}

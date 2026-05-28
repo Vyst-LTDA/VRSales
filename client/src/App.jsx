@@ -9,7 +9,7 @@ import { Routes, Route, useNavigate, useLocation, Outlet, Navigate } from 'react
 import { useAuth } from './context/AuthContext';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
-
+import SettingsPage from './pages/SettingsPage';
 // Importe suas páginas
 import HomePage from './pages/HomePage'; // IMPORTANTE: O novo Hub
 import SalesHistoryPage from './pages/SalesHistoryPage';
@@ -77,7 +77,7 @@ const MainLayout = () => {
 
   const userMenuItems = [
     { key: 'profile', icon: <UserOutlined />, label: 'Meu Perfil' },
-    { key: 'settings', icon: <SettingOutlined />, label: 'Configurações' },
+    { key: 'settings', icon: <SettingOutlined />, label: 'Configurações', onClick: () => navigate('/settings') },
     { type: 'divider' },
     { key: 'logout', icon: <LogoutOutlined />, label: 'Sair', danger: true, onClick: logout },
   ];
@@ -208,7 +208,7 @@ const App = () => {
 
         {/* Rotas Admin e Cashier */}
         <Route element={<RoleBasedRoute allowedRoles={['admin', 'cashier']} />}>
-            <Route path="settings/floor-plan" element={<FloorPlanSettingsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
         </Route>
 
         {/* Fallback */}
