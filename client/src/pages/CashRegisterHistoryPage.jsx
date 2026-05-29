@@ -47,9 +47,7 @@ const CashRegisterHistoryPage = () => {
         fetchHistory();
     }, [fetchHistory]);
 
-    // Função ultra-segura para formatar dinheiro e evitar o "R$ NaN"
     const formatMoney = (val1, val2) => {
-        // Tenta pegar o opening_balance, se não existir tenta initial_balance
         const val = val1 !== undefined && val1 !== null ? val1 : val2;
         
         if (val === null || val === undefined || val === '') return 'R$ 0,00';
@@ -60,7 +58,6 @@ const CashRegisterHistoryPage = () => {
         return `R$ ${num.toFixed(2).replace('.', ',')}`;
     };
 
-    // Filtro local simples por data ou ID
     const filteredHistory = history.filter(item => {
         if (!searchText) return true;
         const searchLower = searchText.toLowerCase();
@@ -139,7 +136,6 @@ const CashRegisterHistoryPage = () => {
             <PageStyles />
             <motion.div className="history-page-container" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 
-                {/* Header Estilizado */}
                 <div className="history-header">
                     <Title level={2} style={{ color: 'white', margin: 0 }}>
                         <FireOutlined style={{ marginRight: 12 }} /> 
@@ -154,7 +150,6 @@ const CashRegisterHistoryPage = () => {
                     </Button>
                 </div>
 
-                {/* Controles e Filtros */}
                 <div className="controls-container">
                     <div className="filters-area">
                         <Input 
@@ -178,9 +173,9 @@ const CashRegisterHistoryPage = () => {
                     </Button>
                 </div>
 
-                {/* Tabela */}
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}>
-                    <Card className="history-table-card" bodyStyle={{ padding: 0 }}>
+                    {/* Alterado bodyStyle para styles={{ body: ... }} */}
+                    <Card className="history-table-card" styles={{ body: { padding: 0 } }}>
                         <Table 
                             className="history-table" 
                             columns={columns} 

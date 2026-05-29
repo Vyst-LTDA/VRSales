@@ -1,3 +1,5 @@
+# api/app/api/endpoints/cash_register.py
+
 from datetime import datetime
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -61,8 +63,6 @@ async def close_cash_register(
             detail="Você não tem nenhum caixa aberto para fechar."
         )
 
-    # Corrigido o status do pedido para 'PAID' (ou o status correto do seu ENUM)
-    # e aplicada a soma cruzando com os itens do pedido
     stmt_sales = (
         select(func.sum(OrderItem.quantity * OrderItem.price_at_order))
         .select_from(Order)
@@ -76,12 +76,11 @@ async def close_cash_register(
     result_sales = await db.execute(stmt_sales)
     total_sales = result_sales.scalar() or 0.0
 
-    # ALTERADO AQUI: open_register.initial_balance -> open_register.opening_balance
     expected_balance = float(open_register.opening_balance) + float(total_sales)
     difference = float(close_info.closing_balance) - expected_balance
 
     open_register.status = "CLOSED"
-    open_register.closed_at = datetime.utcnow()
+    open_register.closed_at = func.now() 
     open_register.closing_balance = close_info.closing_balance
 
     db.add(open_register)
@@ -92,7 +91,6 @@ async def close_cash_register(
         "id": open_register.id,
         "opened_at": open_register.opened_at,
         "closed_at": open_register.closed_at,
-        # ALTERADO AQUI: initial_balance -> opening_balance
         "opening_balance": open_register.opening_balance, 
         "closing_balance": open_register.closing_balance,
         "total_sales": float(total_sales),

@@ -1,6 +1,13 @@
+import os
+import time
+
+# Força o fuso horário da aplicação para o horário de Brasília
+os.environ['TZ'] = 'America/Sao_Paulo'
+if hasattr(time, 'tzset'):
+    time.tzset()
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import time
 from loguru import logger
 
 # --- INÍCIO DA CORREÇÃO ---
